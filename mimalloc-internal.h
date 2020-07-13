@@ -683,7 +683,7 @@ static inline uintptr_t _mi_thread_id(void) mi_attr_noexcept {
   return (uintptr_t)NtCurrentTeb();
 }
 
-#elif 0 && defined(__GNUC__) && \
+#elif defined(__GNUC__) && \
       (defined(__x86_64__) || defined(__i386__) || defined(__arm__) || defined(__aarch64__))
 
 // TLS register on x86 is in the FS or GS register, see: https://akkadia.org/drepper/tls.pdf

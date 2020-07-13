@@ -539,9 +539,9 @@ static void mi_process_done(void) {
 
 #elif defined(__GNUC__) || defined(__clang__)
   // GCC,Clang: use the constructor attribute
-  /*static void __attribute__((constructor)) _mi_process_init(void) {
+  static void __attribute__((constructor)) _mi_process_init(void) {
     mi_process_load();
-  }*/
+  }
 
 #elif defined(_MSC_VER)
   // MSVC: use data section magic for static libraries

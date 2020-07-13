@@ -14,8 +14,6 @@ terms of the MIT license. A copy of the license can be found in the file
 
 #include <string.h>  // strerror
 
-#include <stdlib.h>
-
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -189,8 +187,7 @@ static bool mi_os_mem_free(void* addr, size_t size, bool was_committed, mi_stats
 #elif defined(__wasi__)
   err = 0; // WebAssembly's heap cannot be shrunk
 #else
-  //err = (munmap(addr, size) == -1);
-  free(addr);
+  err = (munmap(addr, size) == -1);
 #endif
   if (was_committed) _mi_stat_decrease(&stats->committed, size);
   _mi_stat_decrease(&stats->reserved, size);
@@ -289,19 +286,18 @@ static void* mi_unix_mmapx(void* addr, size_t size, size_t try_alignment, int pr
   void* p = NULL;
   #if (MI_INTPTR_SIZE >= 8) && !defined(MAP_ALIGNED)
   // on 64-bit systems, use the virtual address area after 4TiB for 4MiB aligned allocations
-  /*void* hint;
+  void* hint;
   if (addr == NULL && (hint = mi_os_get_aligned_hint(try_alignment, size)) != NULL) {
     p = mmap(hint,size,protect_flags,flags,fd,0);
     if (p==MAP_FAILED) p = NULL; // fall back to regular mmap
-  }*/
+  }
   #else
   UNUSED(try_alignment);
   UNUSED(mi_os_get_aligned_hint);
   #endif
   if (p==NULL) {
-    //p = mmap(addr,size,protect_flags,flags,fd,0);
-    p = malloc(size);
-    //if (p==MAP_FAILED) p = NULL;
+    p = mmap(addr,size,protect_flags,flags,fd,0);
+    if (p==MAP_FAILED) p = NULL;
   }
   return p;
 }
@@ -625,9 +621,8 @@ static void mi_mprotect_hint(int err) {
 // Usually commit is aligned liberal, while decommit is aligned conservative.
 // (but not for the reset version where we want commit to be conservative as well)
 static bool mi_os_commitx(void* addr, size_t size, bool commit, bool conservative, bool* is_zero, mi_stats_t* stats) {
-    return true;
   // page align in the range, commit liberally, decommit conservative
-  /*if (is_zero != NULL) { *is_zero = false; }
+  if (is_zero != NULL) { *is_zero = false; }
   size_t csize;
   void* start = mi_os_page_align_areax(conservative, addr, size, &csize);
   if (csize == 0) return true;  // || _mi_os_is_huge_reserved(addr))
@@ -673,7 +668,7 @@ static bool mi_os_commitx(void* addr, size_t size, bool commit, bool conservativ
     mi_mprotect_hint(err);
   }
   mi_assert_internal(err == 0);
-  return (err == 0);*/
+  return (err == 0);
 }
 
 bool _mi_os_commit(void* addr, size_t size, bool* is_zero, mi_stats_t* stats) {
