@@ -58,7 +58,7 @@ terms of the MIT license. A copy of the license can be found in the file
 // Encoded free lists allow detection of corrupted free lists
 // and can detect buffer overflows, modify after free, and double `free`s.
 #if (MI_SECURE>=3 || MI_DEBUG>=1 || MI_PADDING > 0)
-#define MI_ENCODE_FREELIST  1
+//#define MI_ENCODE_FREELIST  1
 #endif
 
 // ------------------------------------------------------
@@ -99,9 +99,9 @@ terms of the MIT license. A copy of the license can be found in the file
 
 // Main tuning parameters for segment and page sizes
 // Sizes for 64-bit, divide by two for 32-bit
-#define MI_SMALL_PAGE_SHIFT               (13 + MI_INTPTR_SHIFT)      // 64kb
-#define MI_MEDIUM_PAGE_SHIFT              ( 3 + MI_SMALL_PAGE_SHIFT)  // 512kb
-#define MI_LARGE_PAGE_SHIFT               ( 3 + MI_MEDIUM_PAGE_SHIFT) // 4mb
+#define MI_SMALL_PAGE_SHIFT               (10 + MI_INTPTR_SHIFT)      // 64kb
+#define MI_MEDIUM_PAGE_SHIFT              ( 2 + MI_SMALL_PAGE_SHIFT)  // 512kb
+#define MI_LARGE_PAGE_SHIFT               ( 2 + MI_MEDIUM_PAGE_SHIFT) // 4mb
 #define MI_SEGMENT_SHIFT                  ( MI_LARGE_PAGE_SHIFT)      // 4mb
 
 // Derived constants
@@ -364,13 +364,26 @@ void _mi_assert_fail(const char* assertion, const char* fname, unsigned int line
 #define mi_assert_expensive(x)
 #endif
 
+/*#if defined(GENMC_ASSERT)
+
+#define mi_assert_internal(x)  \
+if (!(x)) { \
+printf("assert internal! \n"); \
+printf(__FILE__);printf("line: %d\n", __LINE__); \
+}\
+assert(x)
+
+#define mi_assert_expensive(x)
+
+#endif*/
+
 // ------------------------------------------------------
 // Statistics
 // ------------------------------------------------------
 
 #ifndef MI_STAT
 #if (MI_DEBUG>0)
-#define MI_STAT 2
+#define MI_STAT 0
 #else
 #define MI_STAT 0
 #endif

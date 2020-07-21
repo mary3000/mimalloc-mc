@@ -33,7 +33,7 @@ extern inline void* _mi_page_malloc(mi_heap_t* heap, mi_page_t* page, size_t siz
   page->used++;
   mi_assert_internal(page->free == NULL || _mi_ptr_page(page->free) == page);
 #if (MI_DEBUG>0)
-  if (!page->is_zero) { memset(block, MI_DEBUG_UNINIT, size); }
+  //if (!page->is_zero) { memset(block, MI_DEBUG_UNINIT, size); }
 #elif (MI_SECURE!=0)
   block->next = 0;  // don't leak internal data
 #endif
@@ -122,7 +122,7 @@ void _mi_block_zero_init(const mi_page_t* page, void* p, size_t size) {
   }
   else {
     // otherwise memset
-    memset(p, 0, mi_usable_size(p));
+    //memset(p, 0, mi_usable_size(p));
   }
 }
 
@@ -294,7 +294,7 @@ static mi_decl_noinline void _mi_free_block_mt(mi_page_t* page, mi_block_t* bloc
   mi_check_padding(page, block);
   mi_padding_shrink(page, block, sizeof(mi_block_t)); // for small size, ensure we can fit the delayed thread pointers without triggering overflow detection
   #if (MI_DEBUG!=0)
-  memset(block, MI_DEBUG_FREED, mi_usable_size(block));
+  //memset(block, MI_DEBUG_FREED, mi_usable_size(block));
   #endif
 
   // huge page segments are always abandoned and can be freed immediately
@@ -354,7 +354,7 @@ static inline void _mi_free_block(mi_page_t* page, bool local, mi_block_t* block
     if (mi_unlikely(mi_check_is_double_free(page, block))) return;
     mi_check_padding(page, block);
     #if (MI_DEBUG!=0)
-    memset(block, MI_DEBUG_FREED, mi_page_block_size(page));
+    //memset(block, MI_DEBUG_FREED, mi_page_block_size(page));
     #endif
     mi_block_set_next(page, block, page->local_free);
     page->local_free = block;
@@ -434,7 +434,7 @@ void mi_free(void* p) mi_attr_noexcept
     if (mi_unlikely(mi_check_is_double_free(page,block))) return;
     mi_check_padding(page, block);
     #if (MI_DEBUG!=0)
-    memset(block, MI_DEBUG_FREED, mi_page_block_size(page));
+    //memset(block, MI_DEBUG_FREED, mi_page_block_size(page));
     #endif
     mi_block_set_next(page, block, page->local_free);
     page->local_free = block;
@@ -569,9 +569,9 @@ void* _mi_heap_realloc_zero(mi_heap_t* heap, void* p, size_t newsize, bool zero)
     if (zero && newsize > size) {
       // also set last word in the previous allocation to zero to ensure any padding is zero-initialized
       size_t start = (size >= sizeof(intptr_t) ? size - sizeof(intptr_t) : 0);
-      memset((uint8_t*)newp + start, 0, newsize - start);
+      //memset((uint8_t*)newp + start, 0, newsize - start);
     }
-    memcpy(newp, p, (newsize > size ? size : newsize));
+    //memcpy(newp, p, (newsize > size ? size : newsize));
     mi_free(p); // only free if successful
   }
   return newp;
@@ -638,7 +638,9 @@ mi_decl_restrict char* mi_heap_strdup(mi_heap_t* heap, const char* s) mi_attr_no
   if (s == NULL) return NULL;
   size_t n = strlen(s);
   char* t = (char*)mi_heap_malloc(heap,n+1);
-  if (t != NULL) memcpy(t, s, n + 1);
+  if (t != NULL) {
+      //memcpy(t, s, n + 1);
+  }
   return t;
 }
 
@@ -654,7 +656,7 @@ mi_decl_restrict char* mi_heap_strndup(mi_heap_t* heap, const char* s, size_t n)
   mi_assert_internal(m <= n);
   char* t = (char*)mi_heap_malloc(heap, m+1);
   if (t == NULL) return NULL;
-  memcpy(t, s, m);
+  //memcpy(t, s, m);
   t[m] = 0;
   return t;
 }

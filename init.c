@@ -143,7 +143,9 @@ mi_stats_t _mi_stats_main = { MI_STATS_NULL };
 
 
 static void mi_heap_main_init(void) {
+    printf("mi_heap_main_init\n");
   if (_mi_heap_main.cookie == 0) {
+      printf("cookie == 0\n");
     _mi_heap_main.thread_id = _mi_thread_id();
     _mi_heap_main.cookie = _os_random_weak((uintptr_t)&mi_heap_main_init);
     _mi_random_init(&_mi_heap_main.random);
@@ -170,25 +172,42 @@ typedef struct mi_thread_data_s {
 
 // Initialize the thread local default heap, called from `mi_thread_init`
 static bool _mi_heap_init(void) {
-  if (mi_heap_is_initialized(mi_get_default_heap())) return true;
+    printf("mi_heap_init\n");
+
+    printf("main heap %p\n", &_mi_heap_main);
+    printf("default heap %p\n", _mi_heap_default);
+    printf("empty heap %p\n", &_mi_heap_empty);
+
+    if (mi_heap_is_initialized(mi_get_default_heap())) return true;
+
+  printf("not initialized\n");
+
   if (_mi_is_main_thread()) {
+      printf("main thread\n");
     // mi_assert_internal(_mi_heap_main.thread_id != 0);  // can happen on freeBSD where alloc is called before any initialization
     // the main heap is statically allocated
     mi_heap_main_init();
     _mi_heap_set_default_direct(&_mi_heap_main);
+      printf("====2====\nmain heap %p\n", &_mi_heap_main);
+      printf("default heap %p\n", _mi_heap_default);
+      printf("empty heap %p\n", &_mi_heap_empty);
     //mi_assert_internal(_mi_heap_default->tld->heap_backing == mi_get_default_heap());
   }
   else {
     // use `_mi_os_alloc` to allocate directly from the OS
+    printf("_mi_heap_init: os alloc\n");
     mi_thread_data_t* td = (mi_thread_data_t*)_mi_os_alloc(sizeof(mi_thread_data_t),&_mi_stats_main); // Todo: more efficient allocation?
     if (td == NULL) {
-      _mi_error_message(ENOMEM, "failed to allocate thread local heap memory\n");
+        assert(0 && "failed to allocate thread local heap memory\n");
+      //_mi_error_message(ENOMEM, "failed to allocate thread local heap memory\n");
       return false;
     }
-    // OS allocated so already zero initialized
+      printf("_mi_heap_init: os alloc - done!\n");
+      // OS allocated so already zero initialized
     mi_tld_t*  tld = &td->tld;
     mi_heap_t* heap = &td->heap;
-    memcpy(heap, &_mi_heap_empty, sizeof(*heap));
+    *heap = _mi_heap_empty;
+    //memcpy(heap, &_mi_heap_empty, sizeof(*heap));
     heap->thread_id = _mi_thread_id();
     _mi_random_init(&heap->random);
     heap->cookie  = _mi_heap_random_next(heap) | 1;
@@ -328,12 +347,15 @@ static void mi_process_setup_auto_thread_done(void) {
 
 
 bool _mi_is_main_thread(void) {
-  return (_mi_heap_main.thread_id==0 || _mi_heap_main.thread_id == _mi_thread_id());
+      printf("main.tid = %lx\n", _mi_heap_main.thread_id);
+      printf("tid = %lx\n", _mi_thread_id());
+  return (/*_mi_heap_main.thread_id==0 ||*/ _mi_heap_main.thread_id == _mi_thread_id());
 }
 
 // This is called from the `mi_malloc_generic`
 void mi_thread_init(void) mi_attr_noexcept
 {
+      printf("mi_thread_init\n");
   // ensure our process has started already
   mi_process_init();
 
@@ -376,6 +398,9 @@ void _mi_heap_set_default_direct(mi_heap_t* heap)  {
   #elif defined(MI_TLS_PTHREAD)
   // we use _mi_heap_default_key
   #else
+    printf("set default:\n");
+    printf("default heap %p\n", _mi_heap_default);
+    printf("to heap %p\n", heap);
   _mi_heap_default = heap;
   #endif
 
@@ -387,9 +412,9 @@ void _mi_heap_set_default_direct(mi_heap_t* heap)  {
     mi_assert_internal(mi_fls_key != 0);
     FlsSetValue(mi_fls_key, heap);
   #elif defined(MI_USE_PTHREADS)
-  if (_mi_heap_default_key != (pthread_key_t)(-1)) {  // can happen during recursive invocation on freeBSD
+  /*if (_mi_heap_default_key != (pthread_key_t)(-1)) {  // can happen during recursive invocation on freeBSD
     pthread_setspecific(_mi_heap_default_key, heap);
-  }
+  }*/
   #endif
 }
 
@@ -451,26 +476,29 @@ static void mi_process_load(void) {
   UNUSED(dummy);
   #endif
   os_preloading = false;
-  atexit(&mi_process_done);
-  _mi_options_init();
+  //atexit(&mi_process_done);
+  //_mi_options_init();
+
   mi_process_init();
+
   //mi_stats_reset();-
-  if (mi_redirected) _mi_verbose_message("malloc is redirected.\n");
+  //if (mi_redirected) _mi_verbose_message("malloc is redirected.\n");
 
   // show message from the redirector (if present)
-  const char* msg = NULL;
+  /*const char* msg = NULL;
   mi_allocator_init(&msg);
   if (msg != NULL && (mi_option_is_enabled(mi_option_verbose) || mi_option_is_enabled(mi_option_show_errors))) {
     _mi_fputs(NULL,NULL,NULL,msg);
-  }
+  }*/
 }
 
 // Initialize the process; called by thread_init or the process loader
 void mi_process_init(void) mi_attr_noexcept {
+    printf("mi_process_init\n");
   // ensure we are called once
   if (_mi_process_is_initialized) return;
   _mi_process_is_initialized = true;
-  mi_process_setup_auto_thread_done();
+  //mi_process_setup_auto_thread_done();
 
   _mi_verbose_message("process init: 0x%zx\n", _mi_thread_id());
   _mi_os_init();
@@ -480,12 +508,12 @@ void mi_process_init(void) mi_attr_noexcept {
   #endif
   _mi_verbose_message("secure level: %d\n", MI_SECURE);
   mi_thread_init();
-  mi_stats_reset();  // only call stat reset *after* thread init (or the heap tld == NULL)
+  //mi_stats_reset();  // only call stat reset *after* thread init (or the heap tld == NULL)
 
-  if (mi_option_is_enabled(mi_option_reserve_huge_os_pages)) {
+  /*if (mi_option_is_enabled(mi_option_reserve_huge_os_pages)) {
     size_t pages = mi_option_get(mi_option_reserve_huge_os_pages);
     mi_reserve_huge_os_pages_interleave(pages, 0, pages*500);
-  }
+  }*/
 }
 
 // Called when the process is done (through `at_exit`)
@@ -502,6 +530,7 @@ static void mi_process_done(void) {
   FlsFree(mi_fls_key);            // call thread-done on all threads to prevent dangling callback pointer if statically linked with a DLL; Issue #208
   #endif
   #ifndef NDEBUG
+    printf("mi_process_done\n");
   mi_collect(true);
   #endif
   if (mi_option_is_enabled(mi_option_show_stats) ||
@@ -539,9 +568,11 @@ static void mi_process_done(void) {
 
 #elif defined(__GNUC__) || defined(__clang__)
   // GCC,Clang: use the constructor attribute
+#if !defined(GENMC_REMOVE_CONSTRUCTOR)
   static void __attribute__((constructor)) _mi_process_init(void) {
     mi_process_load();
   }
+#endif
 
 #elif defined(_MSC_VER)
   // MSVC: use data section magic for static libraries

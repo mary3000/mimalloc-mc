@@ -97,6 +97,7 @@ static bool mi_page_is_valid_init(mi_page_t* page) {
   //mi_assert_internal(tfree_count <= page->thread_freed + 1);
 
   size_t free_count = mi_page_list_count(page, page->free) + mi_page_list_count(page, page->local_free);
+  printf("%d + %zu == %d\n", page->used, free_count, page->capacity);
   mi_assert_internal(page->used + free_count == page->capacity);
 
   return true;
@@ -361,23 +362,34 @@ void _mi_page_abandon(mi_page_t* page, mi_page_queue_t* pq) {
 
 // Free a page with no more free blocks
 void _mi_page_free(mi_page_t* page, mi_page_queue_t* pq, bool force) {
-  mi_assert_internal(page != NULL);
+    printf("_mi_page_free 0\n");
+
+    mi_assert_internal(page != NULL);
   mi_assert_expensive(_mi_page_is_valid(page));
   mi_assert_internal(pq == mi_page_queue_of(page));
   mi_assert_internal(mi_page_all_free(page));
   mi_assert_internal(mi_page_thread_free_flag(page)!=MI_DELAYED_FREEING);
 
-  // no more aligned blocks in here
+    printf("_mi_page_free 1\n");
+
+    // no more aligned blocks in here
   mi_page_set_has_aligned(page, false);
 
-  // remove from the page list
+    printf("_mi_page_free 2\n");
+
+
+    // remove from the page list
   // (no need to do _mi_heap_delayed_free first as all blocks are already free)
   mi_segments_tld_t* segments_tld = &mi_page_heap(page)->tld->segments;
   mi_page_queue_remove(pq, page);
 
-  // and free it
+    printf("_mi_page_free 3\n");
+
+
+    // and free it
   mi_page_set_heap(page,NULL);
-  _mi_segment_page_free(page, force, segments_tld);
+    printf("_mi_page_free 4\n");
+    _mi_segment_page_free(page, force, segments_tld);
 }
 
 #define MI_MAX_RETIRE_SIZE    MI_LARGE_OBJ_SIZE_MAX  
@@ -426,14 +438,21 @@ void _mi_page_retire(mi_page_t* page) {
 void _mi_heap_collect_retired(mi_heap_t* heap, bool force) {
   size_t min = MI_BIN_FULL;
   size_t max = 0;
+    printf("_mi_heap_collect_retired 0\n");
   for(size_t bin = heap->page_retired_min; bin <= heap->page_retired_max; bin++) {
-    mi_page_queue_t* pq   = &heap->pages[bin];
+      printf("_mi_heap_collect_retired iter 0\n");
+      mi_page_queue_t* pq   = &heap->pages[bin];
     mi_page_t*       page = pq->first;
     if (page != NULL && page->retire_expire != 0) {
-      if (mi_page_all_free(page)) {
-        page->retire_expire--;
+        printf("_mi_heap_collect_retired iter 1\n");
+        if (mi_page_all_free(page)) {
+            printf("_mi_heap_collect_retired iter 2\n");
+
+            page->retire_expire--;
         if (force || page->retire_expire == 0) {
           _mi_page_free(pq->first, pq, force);
+            printf("_mi_heap_collect_retired after page free\n");
+
         }
         else {
           // keep retired, update min/max
@@ -442,7 +461,9 @@ void _mi_heap_collect_retired(mi_heap_t* heap, bool force) {
         }
       }
       else {
-        page->retire_expire = 0;
+            printf("_mi_heap_collect_retired iter else 0\n");
+
+            page->retire_expire = 0;
       }
     }
   }

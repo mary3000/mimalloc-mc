@@ -342,14 +342,16 @@ static mi_stats_t* mi_stats_get_default(void) {
 static void mi_stats_merge_from(mi_stats_t* stats) {
   if (stats != &_mi_stats_main) {
     mi_stats_add(&_mi_stats_main, stats);
-    memset(stats, 0, sizeof(mi_stats_t));
+    //memset(stats, 0, sizeof(mi_stats_t));
   }
 }
 
 void mi_stats_reset(void) mi_attr_noexcept {
   mi_stats_t* stats = mi_stats_get_default();
-  if (stats != &_mi_stats_main) { memset(stats, 0, sizeof(mi_stats_t)); }
-  memset(&_mi_stats_main, 0, sizeof(mi_stats_t));
+  if (stats != &_mi_stats_main) {
+      //memset(stats, 0, sizeof(mi_stats_t));
+  }
+  //memset(&_mi_stats_main, 0, sizeof(mi_stats_t));
   mi_time_start = _mi_clock_start();
 }
 

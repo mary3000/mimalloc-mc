@@ -163,6 +163,7 @@ void _mi_os_init() {
 }
 #else
 void _mi_os_init() {
+    printf("_mi_os_init\n");
   // get the page size
   long result = sysconf(_SC_PAGESIZE);
   if (result > 0) {
@@ -187,7 +188,12 @@ static bool mi_os_mem_free(void* addr, size_t size, bool was_committed, mi_stats
 #elif defined(__wasi__)
   err = 0; // WebAssembly's heap cannot be shrunk
 #else
+#if defined(GENMC_MMAP_TO_MALLOC)
+  printf("free() %p - %p\n", addr, addr + size);
+  //free(addr);
+#else
   err = (munmap(addr, size) == -1);
+#endif
 #endif
   if (was_committed) _mi_stat_decrease(&stats->committed, size);
   _mi_stat_decrease(&stats->reserved, size);
@@ -202,6 +208,17 @@ static bool mi_os_mem_free(void* addr, size_t size, bool was_committed, mi_stats
 }
 
 static void* mi_os_get_aligned_hint(size_t try_alignment, size_t size);
+
+#define MI_BITMAP_FIELD_BITS   (8*MI_INTPTR_SIZE)
+
+#define MI_SEGMENT_ALIGN          MI_SEGMENT_SIZE
+
+#define MI_REGION_MAX_BLOCKS      MI_BITMAP_FIELD_BITS
+#define MI_REGION_SIZE            (MI_SEGMENT_SIZE * MI_BITMAP_FIELD_BITS)    // 256MiB  (64MiB on 32 bits)
+
+#define GENMC_DATA_SIZE ((MI_REGION_SIZE) * 3)
+/*mi_decl_thread*/ //char genmc_data[GENMC_DATA_SIZE];
+mi_decl_thread size_t genmc_end = 0;
 
 #ifdef _WIN32
 static void* mi_win_virtual_allocx(void* addr, size_t size, size_t try_alignment, DWORD flags) {
@@ -287,23 +304,49 @@ static void* mi_unix_mmapx(void* addr, size_t size, size_t try_alignment, int pr
   #if (MI_INTPTR_SIZE >= 8) && !defined(MAP_ALIGNED)
   // on 64-bit systems, use the virtual address area after 4TiB for 4MiB aligned allocations
   void* hint;
+  #if !defined(GENMC_MMAP_TO_MALLOC)
   if (addr == NULL && (hint = mi_os_get_aligned_hint(try_alignment, size)) != NULL) {
     p = mmap(hint,size,protect_flags,flags,fd,0);
     if (p==MAP_FAILED) p = NULL; // fall back to regular mmap
   }
+  #endif
   #else
   UNUSED(try_alignment);
   UNUSED(mi_os_get_aligned_hint);
   #endif
   if (p==NULL) {
+#if defined(GENMC_MMAP_TO_MALLOC)
+    printf("malloc() begin: %zu\n", size);
+    printf("align: %zx\n", try_alignment);
+    /*p = &genmc_data[genmc_end];
+    if (try_alignment != 0) {
+        size_t remainder = (size_t) p % try_alignment;
+        if (remainder != 0) {
+            genmc_end += try_alignment - remainder;
+            p = &genmc_data[genmc_end];
+        }
+    }
+      genmc_end += size;
+      mi_assert_internal(genmc_end <= GENMC_DATA_SIZE);*/
+    p = malloc(size + try_alignment);
+    if (try_alignment != 0) {
+        size_t adjust = (size_t)p % try_alignment;
+        if (adjust != 0) {
+            p += try_alignment - adjust;
+        }
+    }
+    printf("malloc() end: %p - %p\n", p, p + size);
+#else
     p = mmap(addr,size,protect_flags,flags,fd,0);
     if (p==MAP_FAILED) p = NULL;
+#endif
   }
   return p;
 }
 
 static void* mi_unix_mmap(void* addr, size_t size, size_t try_alignment, int protect_flags, bool large_only, bool allow_large, bool* is_large) {
   void* p = NULL;
+  printf("mi_unix_mmap\n");
   #if !defined(MAP_ANONYMOUS)
   #define MAP_ANONYMOUS  MAP_ANON
   #endif
@@ -484,8 +527,12 @@ static void* mi_os_mem_alloc_aligned(size_t size, size_t alignment, bool commit,
   void* p = mi_os_mem_alloc(size, alignment, commit, allow_large, is_large, stats);
   if (p == NULL) return NULL;
 
+  printf("align %zx\n", alignment);
+
   // if not aligned, free it, overallocate, and unmap around it
   if (((uintptr_t)p % alignment != 0)) {
+      printf("alignment!!!\n");
+      //assert(0 && "realloc");
     mi_os_mem_free(p, size, commit, stats);
     if (size >= (SIZE_MAX - alignment)) return NULL; // overflow
     size_t over_size = size + alignment;
@@ -536,7 +583,9 @@ static void* mi_os_mem_alloc_aligned(size_t size, size_t alignment, bool commit,
 #endif
   }
 
-  mi_assert_internal(p == NULL || (p != NULL && ((uintptr_t)p % alignment) == 0));
+    printf("mi_os_mem_alloc_aligned end\n");
+
+    mi_assert_internal(p == NULL || (p != NULL && ((uintptr_t)p % alignment) == 0));
   return p;
 }
 
@@ -545,10 +594,12 @@ static void* mi_os_mem_alloc_aligned(size_t size, size_t alignment, bool commit,
 ----------------------------------------------------------- */
 
 void* _mi_os_alloc(size_t size, mi_stats_t* stats) {
-  if (size == 0) return NULL;
+  /*if (size == 0) return NULL;
   size = _mi_os_good_alloc_size(size);
   bool is_large = false;
-  return mi_os_mem_alloc(size, 0, true, false, &is_large, stats);
+  return mi_os_mem_alloc(size, 0, true, false, &is_large, stats);*/
+  printf("_mi_os_alloc: malloc(%zu)\n", size);
+  return malloc(size);
 }
 
 void  _mi_os_free_ex(void* p, size_t size, bool was_committed, mi_stats_t* stats) {
@@ -621,6 +672,9 @@ static void mi_mprotect_hint(int err) {
 // Usually commit is aligned liberal, while decommit is aligned conservative.
 // (but not for the reset version where we want commit to be conservative as well)
 static bool mi_os_commitx(void* addr, size_t size, bool commit, bool conservative, bool* is_zero, mi_stats_t* stats) {
+#if defined(GENMC_MMAP_TO_MALLOC)
+    return true;
+#else
   // page align in the range, commit liberally, decommit conservative
   if (is_zero != NULL) { *is_zero = false; }
   size_t csize;
@@ -669,6 +723,7 @@ static bool mi_os_commitx(void* addr, size_t size, bool commit, bool conservativ
   }
   mi_assert_internal(err == 0);
   return (err == 0);
+#endif
 }
 
 bool _mi_os_commit(void* addr, size_t size, bool* is_zero, mi_stats_t* stats) {
@@ -699,7 +754,7 @@ static bool mi_os_resetx(void* addr, size_t size, bool reset, mi_stats_t* stats)
 
   #if (MI_DEBUG>1)
   if (MI_SECURE==0) {
-    memset(start, 0, csize); // pretend it is eagerly reset
+    //memset(start, 0, csize); // pretend it is eagerly reset
   }
   #endif
 

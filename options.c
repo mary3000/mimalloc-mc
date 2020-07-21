@@ -183,7 +183,7 @@ static void mi_out_buf(const char* msg, void* arg) {
   if (start+n >= MI_MAX_DELAY_OUTPUT) {
     n = MI_MAX_DELAY_OUTPUT-start-1;
   }
-  memcpy(&out_buf[start], msg, n);
+  //memcpy(&out_buf[start], msg, n);
 }
 
 static void mi_out_buf_flush(mi_output_fun* out, bool no_more_buf, void* arg) {
@@ -264,7 +264,7 @@ static void mi_recurse_exit(void) {
 }
 
 void _mi_fputs(mi_output_fun* out, void* arg, const char* prefix, const char* message) {
-  if (out==NULL || (FILE*)out==stdout || (FILE*)out==stderr) { // TODO: use mi_out_stderr for stderr?
+/*  if (out==NULL || (FILE*)out==stdout || (FILE*)out==stderr) { // TODO: use mi_out_stderr for stderr?
     if (!mi_recurse_enter()) return;
     out = mi_out_get_default(&arg);
     if (prefix != NULL) out(prefix, arg);
@@ -274,7 +274,7 @@ void _mi_fputs(mi_output_fun* out, void* arg, const char* prefix, const char* me
   else {
     if (prefix != NULL) out(prefix, arg);
     out(message, arg);
-  }
+  }*/
 }
 
 // Define our own limited `fprintf` that avoids memory allocation.
@@ -283,7 +283,7 @@ static void mi_vfprintf( mi_output_fun* out, void* arg, const char* prefix, cons
   char buf[512];
   if (fmt==NULL) return;
   if (!mi_recurse_enter()) return;
-  vsnprintf(buf,sizeof(buf)-1,fmt,args);
+  //vsnprintf(buf,sizeof(buf)-1,fmt,args);
   mi_recurse_exit();
   _mi_fputs(out,arg,prefix,buf);
 }
@@ -304,11 +304,11 @@ void _mi_trace_message(const char* fmt, ...) {
 }
 
 void _mi_verbose_message(const char* fmt, ...) {
-  if (!mi_option_is_enabled(mi_option_verbose)) return;
+  /*if (!mi_option_is_enabled(mi_option_verbose)) return;
   va_list args;
   va_start(args,fmt);
   mi_vfprintf(NULL, NULL, "mimalloc: ", fmt, args);
-  va_end(args);
+  va_end(args);*/
 }
 
 static void mi_show_error_message(const char* fmt, va_list args) {
@@ -329,8 +329,8 @@ void _mi_warning_message(const char* fmt, ...) {
 
 #if MI_DEBUG
 void _mi_assert_fail(const char* assertion, const char* fname, unsigned line, const char* func ) {
-  _mi_fprintf(NULL, NULL, "mimalloc: assertion failed: at \"%s\":%u, %s\n  assertion: \"%s\"\n", fname, line, (func==NULL?"":func), assertion);
-  abort();
+  printf("mimalloc: assertion failed: at \"%s\":%u, %s\n  assertion: \"%s\"\n", fname, line, (func==NULL?"":func), assertion);
+  assert(0);
 }
 #endif
 
@@ -370,7 +370,7 @@ void mi_register_error(mi_error_fun* fun, void* arg) {
 
 void _mi_error_message(int err, const char* fmt, ...) {
   // show detailed error message
-  va_list args;
+/*  va_list args;
   va_start(args, fmt);
   mi_show_error_message(fmt, args);
   va_end(args);
@@ -380,7 +380,7 @@ void _mi_error_message(int err, const char* fmt, ...) {
   }
   else {
     mi_error_default(err);
-  }
+  }*/
 }
 
 // --------------------------------------------------------
@@ -388,16 +388,16 @@ void _mi_error_message(int err, const char* fmt, ...) {
 // --------------------------------------------------------
 
 static void mi_strlcpy(char* dest, const char* src, size_t dest_size) {
-  dest[0] = 0;
+  /*dest[0] = 0;
   #pragma warning(suppress:4996)
   strncpy(dest, src, dest_size - 1);
-  dest[dest_size - 1] = 0;
+  dest[dest_size - 1] = 0;*/
 }
 
 static void mi_strlcat(char* dest, const char* src, size_t dest_size) {
-  #pragma warning(suppress:4996)
+  /*#pragma warning(suppress:4996)
   strncat(dest, src, dest_size - 1);
-  dest[dest_size - 1] = 0;
+  dest[dest_size - 1] = 0;*/
 }
 
 #if defined _WIN32
@@ -413,6 +413,8 @@ static bool mi_getenv(const char* name, char* result, size_t result_size) {
 }
 #else
 static bool mi_getenv(const char* name, char* result, size_t result_size) {
+    //printf("getenv\n");
+    return false;
   const char* s = getenv(name);
   if (s == NULL) {
     // in unix environments we check the upper case name too.

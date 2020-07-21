@@ -73,7 +73,7 @@ void*   _mi_arena_alloc_aligned(size_t size, size_t alignment, bool* commit, boo
 #define MI_REGION_MAX_OBJ_SIZE    (MI_REGION_MAX_OBJ_BLOCKS*MI_SEGMENT_SIZE)  
 
 // Region info 
-typedef union mi_region_info_u {
+typedef struct mi_region_info_u {
   uintptr_t value;      
   struct {
     bool  valid;        // initialized?
@@ -81,6 +81,11 @@ typedef union mi_region_info_u {
     short numa_node;    // the associated NUMA node (where -1 means no associated node)
   } x;
 } mi_region_info_t;
+
+const uintptr_t MI_SHORT_BITS = sizeof(short) * 8;
+const uintptr_t MI_VALID = (1 << (MI_SHORT_BITS + 1));
+const uintptr_t MI_IS_LARGE = (1 << (MI_SHORT_BITS));
+const uintptr_t MI_SHORT = ((1 << MI_SHORT_BITS)-1);
 
 
 // A region owns a chunk of REGION_SIZE (256MiB) (virtual) memory with
@@ -205,11 +210,23 @@ static bool mi_region_try_alloc_os(size_t blocks, bool commit, bool allow_large,
 
   // and share it 
   mi_region_info_t info;
-  info.value = 0;                        // initialize the full union to zero
-  info.x.valid = true;
-  info.x.is_large = region_large;
-  info.x.numa_node = (short)_mi_os_numa_node(tld);
+ // info.value = 0;                        // initialize the full union to zero
+  //info.valid = true;
+  //info.is_large = region_large;
+  //info.numa_node = (short)_mi_os_numa_node(tld);
+
+  info.value = 0;
+  info.value = MI_VALID;
+  if (region_large) info.value |= MI_IS_LARGE;
+  info.value |= (short)_mi_os_numa_node(tld);
+
+  //uintptr_t val = 0;
+  //memcpy(&val, &info, sizeof(info));
   mi_atomic_write(&r->info, info.value); // now make it available to others
+  //printf("store to r, idx = %lu, valid = %d\n", idx, info.valid);
+  //atomic_store_explicit(&r->info, info.value, memory_order_release);
+  //mi_region_info_t loaded = atomic_load_explicit(&r->info, memory_order_acquire);
+  //printf("region: %d\n", loaded.valid);
   *region = r;
   return true;
 }
@@ -222,7 +239,12 @@ static bool mi_region_is_suitable(const mem_region_t* region, int numa_node, boo
   // initialized at all?
   mi_region_info_t info;
   info.value = mi_atomic_read_relaxed(&region->info);
-  if (info.value==0) return false;
+  info.x.valid = (info.value & MI_VALID) != 0;
+  info.x.is_large = (info.value & MI_IS_LARGE) != 0;
+  info.x.numa_node = (info.value & MI_SHORT);
+  //info = atomic_load_explicit(&region->info, memory_order_relaxed);
+  if (info.x.valid==0) return false;
+  //memcpy(&info, &value, sizeof(info));
 
   // numa correct
   if (numa_node >= 0) {  // use negative numa node to always succeed
@@ -268,10 +290,12 @@ static void* mi_region_try_alloc(size_t blocks, bool* commit, bool* is_large, bo
   // try to claim in existing regions
   if (!mi_region_try_claim(numa_node, blocks, *is_large, &region, &bit_idx, tld)) {
     // otherwise try to allocate a fresh region and claim in there
+    printf("try_before\n");
     if (!mi_region_try_alloc_os(blocks, *commit, *is_large, &region, &bit_idx, tld)) {
       // out of regions or memory
       return NULL;
     }
+      printf("try_after\n");
   }
   
   // ------------------------------------------------
@@ -280,7 +304,13 @@ static void* mi_region_try_alloc(size_t blocks, bool* commit, bool* is_large, bo
   mi_assert_internal(mi_bitmap_is_claimed(&region->in_use, 1, blocks, bit_idx));
 
   mi_region_info_t info;
-  info.value = mi_atomic_read(&region->info);
+  //uintptr_t value = mi_atomic_read(&region->info);
+  //memcpy(&info, &value, sizeof(info));
+  info.value = atomic_load_explicit(&region->info, memory_order_relaxed);
+    info.x.valid = (info.value & MI_VALID) != 0;
+    info.x.is_large = (info.value & MI_IS_LARGE) != 0;
+    info.x.numa_node = (info.value & MI_SHORT);
+
   uint8_t* start = mi_atomic_read_ptr(uint8_t,&region->start);
   mi_assert_internal(!(info.x.is_large && !*is_large));
   mi_assert_internal(start != NULL);
@@ -382,7 +412,8 @@ Free
 
 // Free previously allocated memory with a given id.
 void _mi_mem_free(void* p, size_t size, size_t id, bool full_commit, bool any_reset, mi_os_tld_t* tld) {
-  mi_assert_internal(size > 0 && tld != NULL);
+    printf("_mi_mem_free 0\n");
+    mi_assert_internal(size > 0 && tld != NULL);
   if (p==NULL) return;
   if (size==0) return;
   size = _mi_align_up(size, _mi_os_page_size());
@@ -390,29 +421,49 @@ void _mi_mem_free(void* p, size_t size, size_t id, bool full_commit, bool any_re
   size_t arena_memid = 0;
   mi_bitmap_index_t bit_idx;
   mem_region_t* region;
-  if (mi_memid_is_arena(id,&region,&bit_idx,&arena_memid)) {
+    printf("_mi_mem_free 1\n");
+    if (mi_memid_is_arena(id,&region,&bit_idx,&arena_memid)) {
    // was a direct arena allocation, pass through
-    _mi_arena_free(p, size, arena_memid, full_commit, tld->stats);
+      printf("_mi_mem_free if 0\n");
+      _mi_arena_free(p, size, arena_memid, full_commit, tld->stats);
   }
   else {
-    // allocated in a region
+        printf("_mi_mem_free else 0\n");
+        // allocated in a region
     mi_assert_internal(size <= MI_REGION_MAX_OBJ_SIZE); if (size > MI_REGION_MAX_OBJ_SIZE) return;
     const size_t blocks = mi_region_block_count(size);
-    mi_assert_internal(blocks + bit_idx <= MI_BITMAP_FIELD_BITS);
+        printf("_mi_mem_free else 1\n");
+        mi_assert_internal(blocks + bit_idx <= MI_BITMAP_FIELD_BITS);
     mi_region_info_t info;
     info.value = mi_atomic_read(&region->info);
-    mi_assert_internal(info.value != 0);
-    void* blocks_start = mi_region_blocks_start(region, bit_idx);
-    mi_assert_internal(blocks_start == p); // not a pointer in our area?
+        info.x.valid = (info.value & MI_VALID) != 0;
+        info.x.is_large = (info.value & MI_IS_LARGE) != 0;
+        info.x.numa_node = (info.value & MI_SHORT);
+        //info = atomic_load_explicit(&region->info, memory_order_relaxed);
+        //memcpy(&info, &value, sizeof(info));
+        printf("_mi_mem_free else 2\n");
+        //printf("val %lu\n", value);
+
+        printf("_mi_mem_free else 3\n");
+
+
+        printf("_mi_mem_free else 4\n");
+        void* blocks_start = mi_region_blocks_start(region, bit_idx);
+        printf("_mi_mem_free else 5\n");
+
+        mi_assert_internal(blocks_start == p); // not a pointer in our area?
     mi_assert_internal(bit_idx + blocks <= MI_BITMAP_FIELD_BITS);
     if (blocks_start != p || bit_idx + blocks > MI_BITMAP_FIELD_BITS) return; // or `abort`?
 
-    // committed?
+        printf("_mi_mem_free else 1\n");
+        // committed?
     if (full_commit && (size % MI_SEGMENT_SIZE) == 0) {
       mi_bitmap_claim(&region->commit, 1, blocks, bit_idx, NULL);
     }
 
-    if (any_reset) {
+      printf("_mi_mem_free else 2\n");
+
+      if (any_reset) {
       // set the is_reset bits if any pages were reset
       mi_bitmap_claim(&region->reset, 1, blocks, bit_idx, NULL);
     }
@@ -441,7 +492,8 @@ void _mi_mem_free(void* p, size_t size, size_t id, bool full_commit, bool any_re
   collection
 -----------------------------------------------------------------------------*/
 void _mi_mem_collect(mi_os_tld_t* tld) {
-  // free every region that has no segments in use.
+    printf("_mi_mem_collect begin\n");
+    // free every region that has no segments in use.
   uintptr_t rcount = mi_atomic_read_relaxed(&regions_count);
   for (size_t i = 0; i < rcount; i++) {
     mem_region_t* region = &regions[i];
@@ -452,15 +504,17 @@ void _mi_mem_collect(mi_os_tld_t* tld) {
         m = mi_atomic_read_relaxed(&region->in_use);
       } while(m == 0 && !mi_atomic_cas_weak(&region->in_use, MI_BITMAP_FIELD_FULL, 0 ));
       if (m == 0) {
-        // on success, free the whole region
+          printf("_mi_mem_collect m == 0\n");
+          // on success, free the whole region
         uint8_t* start = mi_atomic_read_ptr(uint8_t,&regions[i].start);
         size_t arena_memid = mi_atomic_read_relaxed(&regions[i].arena_memid);
         uintptr_t commit = mi_atomic_read_relaxed(&regions[i].commit);
-        memset(&regions[i], 0, sizeof(mem_region_t));
+        //memset(&regions[i], 0, sizeof(mem_region_t));
         // and release the whole region
         mi_atomic_write(&region->info, 0);
         if (start != NULL) { // && !_mi_os_is_huge_reserved(start)) {         
           _mi_abandoned_await_readers(); // ensure no pending reads
+          printf("_mi_mem_collect\n");
           _mi_arena_free(start, MI_REGION_SIZE, arena_memid, (~commit == 0), tld->stats);
         }
       }

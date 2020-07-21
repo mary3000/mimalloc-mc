@@ -8,7 +8,7 @@ terms of the MIT license. A copy of the license can be found in the file
 #include "mimalloc-internal.h"
 #include "mimalloc-atomic.h"
 
-#include <string.h>  // memset
+#include <string.h>  // //memset
 #include <stdio.h>
 
 #define MI_PAGE_HUGE_ALIGN  (256*1024)
@@ -160,6 +160,7 @@ static bool mi_segment_is_valid(const mi_segment_t* segment, mi_segments_tld_t* 
       mi_assert_expensive(!mi_pages_reset_contains(page, tld));
     }
   }
+  printf("segment (nfree) %zu + %zu = %zu\n", nfree, segment->used, segment->capacity);
   mi_assert_internal(nfree + segment->used == segment->capacity);
   // mi_assert_internal(segment->thread_id == _mi_thread_id() || (segment->thread_id==0)); // or 0
   mi_assert_internal(segment->page_kind == MI_PAGE_HUGE ||
@@ -384,6 +385,7 @@ static uint8_t* mi_segment_raw_page_start(const mi_segment_t* segment, const mi_
   if (page_size != NULL) *page_size = psize;
   mi_assert_internal(page->xblock_size == 0 || _mi_ptr_page(p) == page);
   mi_assert_internal(_mi_ptr_segment(p) == segment);
+  //printf("segment raw start: %p\n", p);
   return p;
 }
 
@@ -451,6 +453,7 @@ static void mi_segments_track_size(long segment_size, mi_segments_tld_t* tld) {
 }
 
 static void mi_segment_os_free(mi_segment_t* segment, size_t segment_size, mi_segments_tld_t* tld) {
+    printf("mi_segment_os_free\n");
   segment->thread_id = 0;
   mi_segments_track_size(-((long)segment_size),tld);
   if (MI_SECURE != 0) {
@@ -458,18 +461,24 @@ static void mi_segment_os_free(mi_segment_t* segment, size_t segment_size, mi_se
     mi_segment_protect(segment, false, tld->os); // ensure no more guard pages are set
   }
 
+    printf("mi_segment_os_free 1\n");
   bool any_reset = false;
   bool fully_committed = true;
   for (size_t i = 0; i < segment->capacity; i++) {
-    mi_page_t* page = &segment->pages[i];
+      mi_page_t* page = &segment->pages[i];
     if (!page->is_committed) { fully_committed = false; }
     if (page->is_reset)      { any_reset = true; }
   }
-  if (any_reset && mi_option_is_enabled(mi_option_reset_decommits)) {
+    printf("mi_segment_os_free 2\n");
+
+    if (any_reset && mi_option_is_enabled(mi_option_reset_decommits)) {
     fully_committed = false;
   }
-  
-  _mi_mem_free(segment, segment_size, segment->memid, fully_committed, any_reset, tld->os);
+    printf("mi_segment_os_free 3\n");
+
+
+    _mi_mem_free(segment, segment_size, segment->memid, fully_committed, any_reset, tld->os);
+    printf("mi_segment_os_free end\n");
 }
 
 
@@ -635,7 +644,21 @@ static mi_segment_t* mi_segment_init(mi_segment_t* segment, size_t required, mi_
   if (!pages_still_good) {
     // zero the segment info (but not the `mem` fields)
     ptrdiff_t ofs = offsetof(mi_segment_t, next);
-    memset((uint8_t*)segment + ofs, 0, info_size - ofs);
+      segment->next = 0;        // must be the first segment field -- see `segment.c:segment_alloc`
+      segment->prev = 0;
+      segment->abandoned_next = 0;
+      segment->abandoned = 0;        // abandoned pages (i.e. the original owning thread stopped) (`abandoned <= used`)
+      segment->abandoned_visits = 0; // count how often this segment is visited in the abandoned list (to force reclaim it it is too long)
+      segment->used = 0;        // count of pages in use (`used <= capacity`)
+      segment->capacity = 0;    // count of available pages (`#free + used`)
+      segment->segment_size = 0;// for huge pages this may be different from `MI_SEGMENT_SIZE`
+      segment->segment_info_size = 0;  // space we are using from the first page for segment meta-data and possible guard pages.
+      segment->cookie = 0;      // verify addresses in secure mode: `_mi_ptr_cookie(segment) == segment->cookie`
+      segment->page_shift = 0;  // `1 << page_shift` == the page sizes == `page->block_size * page->reserved` (unless the first page, then `-segment_info_size`).
+      segment->thread_id = 0;   // unique id of the thread owning this segment
+      segment->page_kind = 0;   // kind of pages: small, large, or huge
+      //segment->pages[0] = 0;    // up to `MI_SMALL_PAGES_PER_SEGMENT` pages
+    //memset((uint8_t*)segment + ofs, 0, info_size - ofs);
 
     // initialize pages info
     for (uint8_t i = 0; i < capacity; i++) {
@@ -648,7 +671,20 @@ static mi_segment_t* mi_segment_init(mi_segment_t* segment, size_t required, mi_
   else {
     // zero the segment info but not the pages info (and mem fields)
     ptrdiff_t ofs = offsetof(mi_segment_t, next);
-    memset((uint8_t*)segment + ofs, 0, offsetof(mi_segment_t,pages) - ofs);
+      segment->next = 0;        // must be the first segment field -- see `segment.c:segment_alloc`
+      segment->prev = 0;
+      segment->abandoned_next = 0;
+      segment->abandoned = 0;        // abandoned pages (i.e. the original owning thread stopped) (`abandoned <= used`)
+      segment->abandoned_visits = 0; // count how often this segment is visited in the abandoned list (to force reclaim it it is too long)
+      segment->used = 0;        // count of pages in use (`used <= capacity`)
+      segment->capacity = 0;    // count of available pages (`#free + used`)
+      segment->segment_size = 0;// for huge pages this may be different from `MI_SEGMENT_SIZE`
+      segment->segment_info_size = 0;  // space we are using from the first page for segment meta-data and possible guard pages.
+      segment->cookie = 0;      // verify addresses in secure mode: `_mi_ptr_cookie(segment) == segment->cookie`
+      segment->page_shift = 0;  // `1 << page_shift` == the page sizes == `page->block_size * page->reserved` (unless the first page, then `-segment_info_size`).
+      segment->thread_id = 0;   // unique id of the thread owning this segment
+      segment->page_kind = 0;   // kind of pages: small, large, or huge
+    //memset((uint8_t*)segment + ofs, 0, offsetof(mi_segment_t,pages) - ofs);
   }
 
   // initialize
@@ -780,7 +816,7 @@ static void mi_segment_page_clear(mi_segment_t* segment, mi_page_t* page, bool a
   uint16_t capacity = page->capacity;
   uint16_t reserved = page->reserved;
   ptrdiff_t ofs = offsetof(mi_page_t,capacity);
-  memset((uint8_t*)page + ofs, 0, sizeof(*page) - ofs);
+  //memset((uint8_t*)page + ofs, 0, sizeof(*page) - ofs);
   page->capacity = capacity;
   page->reserved = reserved;
   page->xblock_size = block_size;
@@ -1231,6 +1267,7 @@ static mi_page_t* mi_segment_page_alloc(mi_heap_t* heap, size_t block_size, mi_p
     if (segment == NULL) return NULL;  // return NULL if out-of-memory (or reclaimed)
     mi_assert_internal(free_queue->first == segment);
     mi_assert_internal(segment->page_kind==kind);
+    printf("segment: %zu < %zu\n", segment->used, segment->capacity);
     mi_assert_internal(segment->used < segment->capacity);
   }
   mi_assert_internal(free_queue->first != NULL);

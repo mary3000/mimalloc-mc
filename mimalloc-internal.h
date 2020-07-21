@@ -139,8 +139,8 @@ bool        _mi_page_is_valid(mi_page_t* page);
 // ------------------------------------------------------
 
 #if defined(__GNUC__) || defined(__clang__)
-#define mi_unlikely(x)     __builtin_expect((x),0)
-#define mi_likely(x)       __builtin_expect((x),1)
+#define mi_unlikely(x) x
+#define mi_likely(x) x
 #else
 #define mi_unlikely(x)     (x)
 #define mi_likely(x)       (x)
@@ -683,7 +683,7 @@ static inline uintptr_t _mi_thread_id(void) mi_attr_noexcept {
   return (uintptr_t)NtCurrentTeb();
 }
 
-#elif defined(__GNUC__) && \
+#elif !defined(GENMC_REMOVE_ASM) && defined(__GNUC__) && \
       (defined(__x86_64__) || defined(__i386__) || defined(__arm__) || defined(__aarch64__))
 
 // TLS register on x86 is in the FS or GS register, see: https://akkadia.org/drepper/tls.pdf
@@ -735,7 +735,8 @@ static inline uintptr_t _mi_thread_id(void) mi_attr_noexcept {
 #else
 // otherwise use standard C
 static inline uintptr_t _mi_thread_id(void) mi_attr_noexcept {
-  return (uintptr_t)&_mi_heap_default;
+  //return (uintptr_t)&_mi_heap_default;
+  return (uintptr_t)pthread_self();
 }
 #endif
 

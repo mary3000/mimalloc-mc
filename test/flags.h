@@ -1,0 +1,15 @@
+#pragma once
+
+#define GENMC_IGNORE_PRINT 1
+
+#define GENMC_REMOVE_CONSTRUCTOR 1
+
+#define GENMC_MMAP_TO_MALLOC 1
+
+#define GENMC_REMOVE_ASM 1
+
+//#undef MI_MALLOC_OVERRIDE
+
+#define MI_DEBUG 3
+
+#define GENMC_ASSERT 1

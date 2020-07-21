@@ -111,6 +111,7 @@ static bool mi_heap_page_never_delayed_free(mi_heap_t* heap, mi_page_queue_t* pq
 
 static void mi_heap_collect_ex(mi_heap_t* heap, mi_collect_t collect)
 {
+    printf("mi_heap_collect_ex begin\n");
   if (!mi_heap_is_initialized(heap)) return;
   _mi_deferred_free(heap, collect >= MI_FORCE);
 
@@ -125,8 +126,11 @@ static void mi_heap_collect_ex(mi_heap_t* heap, mi_collect_t collect)
   {
     // the main thread is abandoned (end-of-program), try to reclaim all abandoned segments.
     // if all memory is freed by now, all segments should be freed.
+      printf("mi_heap_collect_ex mid0\n");
     _mi_abandoned_reclaim_all(heap, &heap->tld->segments);
   }
+
+    printf("mi_heap_collect_ex mid1\n");
   
 
   // if abandoning, mark all pages to no longer add to delayed_free
@@ -134,12 +138,18 @@ static void mi_heap_collect_ex(mi_heap_t* heap, mi_collect_t collect)
     mi_heap_visit_pages(heap, &mi_heap_page_never_delayed_free, NULL, NULL);
   }
 
+    printf("mi_heap_collect_ex mid3\n");
+
   // free thread delayed blocks.
   // (if abandoning, after this there are no more thread-delayed references into the pages.)
   _mi_heap_delayed_free(heap);
 
+    printf("mi_heap_collect_ex mid4\n");
+
   // collect retired pages
   _mi_heap_collect_retired(heap, collect >= MI_FORCE);
+
+    printf("mi_heap_collect_ex midn\n");
 
   // collect all pages owned by this thread
   mi_heap_visit_pages(heap, &mi_heap_page_collect, &collect, NULL);
@@ -150,9 +160,12 @@ static void mi_heap_collect_ex(mi_heap_t* heap, mi_collect_t collect)
     _mi_segment_thread_collect(&heap->tld->segments);
   }
 
+    printf("mi_heap_collect_ex mid_end\n");
+
   #ifndef NDEBUG
   // collect regions
   if (collect >= MI_FORCE && _mi_is_main_thread() && mi_heap_is_backing(heap)) {
+      printf("mi_heap_collect_ex\n");
     _mi_mem_collect(&heap->tld->os);
   }
   #endif
@@ -163,10 +176,12 @@ void _mi_heap_collect_abandon(mi_heap_t* heap) {
 }
 
 void mi_heap_collect(mi_heap_t* heap, bool force) mi_attr_noexcept {
+    printf("mi_heap_collect\n");
   mi_heap_collect_ex(heap, (force ? MI_FORCE : MI_NORMAL));
 }
 
 void mi_collect(bool force) mi_attr_noexcept {
+    printf("mi_collect\n");
   mi_heap_collect(mi_get_default_heap(), force);
 }
 
@@ -193,7 +208,7 @@ mi_heap_t* mi_heap_new(void) {
   mi_heap_t* bheap = mi_heap_get_backing();
   mi_heap_t* heap = mi_heap_malloc_tp(bheap, mi_heap_t);  // todo: OS allocate in secure mode?
   if (heap==NULL) return NULL;
-  memcpy(heap, &_mi_heap_empty, sizeof(mi_heap_t));
+  //memcpy(heap, &_mi_heap_empty, sizeof(mi_heap_t));
   heap->tld = bheap->tld;
   heap->thread_id = _mi_thread_id();
   _mi_random_split(&bheap->random, &heap->random);
@@ -215,11 +230,17 @@ uintptr_t _mi_heap_random_next(mi_heap_t* heap) {
 static void mi_heap_reset_pages(mi_heap_t* heap) {
   mi_assert_internal(mi_heap_is_initialized(heap));
   // TODO: copy full empty heap instead?
-  memset(&heap->pages_free_direct, 0, sizeof(heap->pages_free_direct));
+  //memset(&heap->pages_free_direct, 0, sizeof(heap->pages_free_direct));
+  for (size_t i = 0; i < MI_PAGES_DIRECT; ++i) {
+      heap->pages_free_direct[i] = 0;
+  }
 #ifdef MI_MEDIUM_DIRECT
-  memset(&heap->pages_free_medium, 0, sizeof(heap->pages_free_medium));
+  //memset(&heap->pages_free_medium, 0, sizeof(heap->pages_free_medium));
 #endif
-  memcpy(&heap->pages, &_mi_heap_empty.pages, sizeof(heap->pages));
+  //memcpy(&heap->pages, &_mi_heap_empty.pages, sizeof(heap->pages));
+  for (size_t i = 0; i < MI_BIN_FULL + 1; ++i) {
+      heap->pages[i] = _mi_heap_empty.pages[i];
+  }
   heap->thread_delayed_free = NULL;
   heap->page_count = 0;
 }
@@ -474,7 +495,7 @@ static bool mi_heap_area_visit_blocks(const mi_heap_area_ex_t* xarea, mi_block_v
   // create a bitmap of free blocks.
   #define MI_MAX_BLOCKS   (MI_SMALL_PAGE_SIZE / sizeof(void*))
   uintptr_t free_map[MI_MAX_BLOCKS / sizeof(uintptr_t)];
-  memset(free_map, 0, sizeof(free_map));
+  //memset(free_map, 0, sizeof(free_map));
 
   size_t free_count = 0;
   for (mi_block_t* block = page->free; block != NULL; block = mi_block_next(page,block)) {

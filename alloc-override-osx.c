@@ -193,7 +193,7 @@ static malloc_zone_t* mi_get_default_zone()
 static void __attribute__((constructor)) _mi_macos_override_malloc()
 {
   static malloc_introspection_t intro;
-  memset(&intro, 0, sizeof(intro));
+  //memset(&intro, 0, sizeof(intro));
 
   intro.enumerator = &intro_enumerator;
   intro.good_size = &intro_good_size;
@@ -204,7 +204,7 @@ static void __attribute__((constructor)) _mi_macos_override_malloc()
   intro.force_unlock = &intro_force_unlock;
 
   static malloc_zone_t zone;
-  memset(&zone, 0, sizeof(zone));
+  //memset(&zone, 0, sizeof(zone));
 
   zone.version = 4;
   zone.zone_name = "mimalloc";

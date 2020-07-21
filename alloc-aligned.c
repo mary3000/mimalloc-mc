@@ -135,10 +135,10 @@ static void* mi_heap_realloc_zero_aligned_at(mi_heap_t* heap, void* p, size_t ne
         else {
           // also set last word in the previous allocation to zero to ensure any padding is zero-initialized
           size_t start = (size >= sizeof(intptr_t) ? size - sizeof(intptr_t) : 0);
-          memset((uint8_t*)newp + start, 0, newsize - start);
+          //memset((uint8_t*)newp + start, 0, newsize - start);
         }
       }
-      memcpy(newp, p, (newsize > size ? size : newsize));
+      //memcpy(newp, p, (newsize > size ? size : newsize));
       mi_free(p); // only free if successful
     }
     return newp;

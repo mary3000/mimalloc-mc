@@ -96,10 +96,11 @@ static inline uint32_t read32(const uint8_t* p, size_t idx32) {
 
 static void chacha_init(mi_random_ctx_t* ctx, const uint8_t key[32], uint64_t nonce)
 {
+    return;
   // since we only use chacha for randomness (and not encryption) we
   // do not _need_ to read 32-bit values as little endian but we do anyways
   // just for being compatible :-)
-  memset(ctx, 0, sizeof(*ctx));
+  //memset(ctx, 0, sizeof(*ctx));
   for (size_t i = 0; i < 4; i++) {
     const uint8_t* sigma = (uint8_t*)"expand 32-byte k";
     ctx->input[i] = read32(sigma,i);
@@ -114,14 +115,14 @@ static void chacha_init(mi_random_ctx_t* ctx, const uint8_t key[32], uint64_t no
 }
 
 static void chacha_split(mi_random_ctx_t* ctx, uint64_t nonce, mi_random_ctx_t* ctx_new) {
-  memset(ctx_new, 0, sizeof(*ctx_new));
-  memcpy(ctx_new->input, ctx->input, sizeof(ctx_new->input));
-  ctx_new->input[12] = 0;
+  //memset(ctx_new, 0, sizeof(*ctx_new));
+  //memcpy(ctx_new->input, ctx->input, sizeof(ctx_new->input));
+  /*ctx_new->input[12] = 0;
   ctx_new->input[13] = 0;
   ctx_new->input[14] = (uint32_t)nonce;
   ctx_new->input[15] = (uint32_t)(nonce >> 32);
   mi_assert_internal(ctx->input[14] != ctx_new->input[14] || ctx->input[15] != ctx_new->input[15]); // do not reuse nonces!
-  chacha_block(ctx_new);
+  chacha_block(ctx_new);*/
 }
 
 
@@ -136,16 +137,17 @@ static bool mi_random_is_initialized(mi_random_ctx_t* ctx) {
 #endif
 
 void _mi_random_split(mi_random_ctx_t* ctx, mi_random_ctx_t* ctx_new) {
-  mi_assert_internal(mi_random_is_initialized(ctx));
-  mi_assert_internal(ctx != ctx_new);
-  chacha_split(ctx, (uintptr_t)ctx_new /*nonce*/, ctx_new);
+  //mi_assert_internal(mi_random_is_initialized(ctx));
+  //mi_assert_internal(ctx != ctx_new);
+  //chacha_split(ctx, (uintptr_t)ctx_new /*nonce*/, ctx_new);
 }
 
 uintptr_t _mi_random_next(mi_random_ctx_t* ctx) {
-  mi_assert_internal(mi_random_is_initialized(ctx));
+  //mi_assert_internal(mi_random_is_initialized(ctx));
   #if MI_INTPTR_SIZE <= 4
     return chacha_next32(ctx);
   #elif MI_INTPTR_SIZE == 8
+    return 0;
     return (((uintptr_t)chacha_next32(ctx) << 32) | chacha_next32(ctx));
   #else
   # error "define mi_random_next for this platform"
@@ -181,7 +183,7 @@ static bool os_random_buf(void* buf, size_t buf_len) {
       defined(__wasi__)
 #include <stdlib.h>
 static bool os_random_buf(void* buf, size_t buf_len) {
-  arc4random_buf(buf, buf_len);
+  //arc4random_buf(buf, buf_len);
   return true;
 }
 #elif defined(__linux__)
@@ -243,7 +245,7 @@ static bool os_random_buf(void* buf, size_t buf_len) {
 
 uintptr_t _os_random_weak(uintptr_t extra_seed) {
   uintptr_t x = (uintptr_t)&_os_random_weak ^ extra_seed; // ASLR makes the address random
-  #if defined(_WIN32)
+  /*#if defined(_WIN32)
     LARGE_INTEGER pcount;
     QueryPerformanceCounter(&pcount);
     x ^= (uintptr_t)(pcount.QuadPart);
@@ -260,12 +262,12 @@ uintptr_t _os_random_weak(uintptr_t extra_seed) {
   for (uintptr_t i = 0; i < max; i++) {
     x = _mi_random_shuffle(x);
   }
-  mi_assert_internal(x != 0);
+  mi_assert_internal(x != 0);*/
   return x;
 }
 
 void _mi_random_init(mi_random_ctx_t* ctx) {
-  uint8_t key[32];
+  /*uint8_t key[32];
   if (!os_random_buf(key, sizeof(key))) {
     // if we fail to get random data from the OS, we fall back to a
     // weak random source based on the current time
@@ -276,7 +278,7 @@ void _mi_random_init(mi_random_ctx_t* ctx) {
       ((uint32_t*)key)[i] = (uint32_t)x;
     }
   }
-  chacha_init(ctx, key, (uintptr_t)ctx /*nonce*/ );
+  chacha_init(ctx, key, (uintptr_t)ctx *//*nonce*//* );*/
 }
 
 /* --------------------------------------------------------
