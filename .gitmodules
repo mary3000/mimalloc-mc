@@ -1,0 +1,4 @@
+[submodule "genmc"]
+	path = genmc
+	url = git@github.com:mary3000/genmc.git
+	branch = mimalloc-patch
