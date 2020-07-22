@@ -7,5 +7,7 @@
 ## Potential issues
 
 - Non-trivial algorithm in multithread freeing (using `delayed` flags) due to full pages logic.
+
 - Abandoned pages / segments
+
 - Concurrent bitmap, fixed ABA
