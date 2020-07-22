@@ -13,9 +13,9 @@ void __VERIFIER_assume(int);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include "mimalloc.h"
-#include "mimalloc-internal.h"
-#include "mimalloc-types.h"
+#include "mimalloc/mimalloc.h"
+#include "mimalloc/mimalloc-internal.h"
+#include "mimalloc/mimalloc-types.h"
 
 void _mi_assert_fail(const char* assertion, const char* fname, unsigned line, const char* func ) {
     printf("mimalloc: assertion failed: at \"%s\":%u, %s\n  assertion: \"%s\"\n", fname, line, (func==NULL?"":func), assertion);
