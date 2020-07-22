@@ -11,6 +11,9 @@
 
 void __VERIFIER_assume(int);
 
+//#define GENMC_LOG 1
+#include "test/macro.h"
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "mimalloc/mimalloc.h"
@@ -34,12 +37,12 @@ void _genmc_free_block_mt(mi_page_t* page, mi_block_t* block)
         tfree = mi_atomic_read_relaxed(&page->xthread_free);
         use_delayed = (mi_tf_delayed(tfree) == MI_USE_DELAYED_FREE);
         if (mi_unlikely(use_delayed)) {
-            printf("use delayed\n");
+            genmc_log("use delayed\n");
             // unlikely: this only happens on the first concurrent free in a page that is in the full list
             tfreex = mi_tf_set_delayed(tfree,MI_DELAYED_FREEING);
         }
         else {
-            printf("use thread_free\n");
+            genmc_log("use thread_free\n");
             // usual: directly add to page thread_free list
             //mi_block_set_next(page, block, mi_tf_block(tfree));
             block->next = (mi_encoded_t)mi_tf_block(tfree);
@@ -69,7 +72,7 @@ void _genmc_free_block_mt(mi_page_t* page, mi_block_t* block)
         } while (!mi_atomic_cas_weak(&page->xthread_free, tfreex, tfree));
     }
 
-    printf("DONE!\n");
+    genmc_log("DONE!\n");
 }
 
 void genmc_page_free_list_extend(mi_page_t* const page, void* page_area, const size_t bsize, const size_t extend)
@@ -263,7 +266,7 @@ void* _genmc_malloc_generic(mi_heap_t* heap, size_t size) mi_attr_noexcept
 
 void* os_alloc(size_t size) {
     char* data = malloc(size);
-    printf("malloc(%zu) = [%p, %p)\n", size, data, data + size);
+    genmc_log("malloc(%zu) = [%p, %p)\n", size, data, data + size);
     /*for (size_t i = 0; i < size; ++i) {
         data[i] = 0;
     }*/
@@ -311,7 +314,7 @@ void *routine(void *arg)
 
 
     mi_block_t* block = page->free;
-    printf("block: 0x%p\n", block);
+    genmc_log("block: 0x%p\n", block);
     size_t cnt = 0;
     while (block != NULL) {
         ++cnt;
@@ -328,7 +331,7 @@ void *routine(void *arg)
     __VERIFIER_assume(other_block != NULL);
     assert(other_block != NULL);
 
-    printf("other block = %p\n", other_block);
+    genmc_log("other block = %p\n", other_block);
 
     while (other_block != NULL) {
         mi_block_t* next = (mi_block_t *) other_block->next;
@@ -341,7 +344,6 @@ void *routine(void *arg)
         if (_genmc_page_malloc(heap, page, bsize)) {
             ++allocated;
         }
-        break;
     }
 
     return NULL;
@@ -359,7 +361,7 @@ void *thread2(void *arg)
 
 int main() {
 
-    printf("begin\n");
+    genmc_log("begin\n");
 
     pthread_t t1, t2;
 
