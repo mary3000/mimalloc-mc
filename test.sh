@@ -1,3 +1,3 @@
 #! /bin/sh
 
-genmc  -- -I . "$1"
+./genmc/src/genmc  -- -I . "$1"
