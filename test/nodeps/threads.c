@@ -245,6 +245,7 @@ void* _genmc_malloc_generic(mi_heap_t* heap, size_t size) mi_attr_noexcept
 
     // find (or allocate) a page of the right size
     mi_page_t* page = genmc_find_page(heap, size);
+    assert(page != NULL);
     if (mi_unlikely(page == NULL)) { // first time out of memory, try to collect and retry the allocation once more
         mi_heap_collect(heap, true /* force */);
         page = genmc_find_page(heap, size);
@@ -287,17 +288,15 @@ void init_page(mi_page_t* page, mi_heap_t* heap, size_t reserved, uint32_t bsize
     page->reserved = reserved;
     page->xblock_size = bsize;
 
-
     heap->pages_free_direct[0] = page;
     atomic_store_explicit(&heap->thread_delayed_free, NULL, memory_order_release);
 
     atomic_store_explicit(&page->xheap, (uintptr_t) heap, memory_order_release);
 }
 
-void *routine(void *arg)
+void *routine1(void *arg)
 {
     int tid = (int)pthread_self() - 1;
-    int other_tid = (tid + 1) % 2;
 
     mi_heap_t* heap = &heaps[tid];
     mi_page_t* page = &pages[tid];
@@ -306,24 +305,27 @@ void *routine(void *arg)
     size_t bnum = 1;
     init_page(page, heap, bnum, bsize);
 
-
     char* data = os_alloc(bsize * bnum);
-
 
     genmc_page_free_list_extend(page, data, bsize, bnum);
 
-
-    mi_block_t* block = page->free;
-    genmc_log("block: 0x%p\n", block);
-    size_t cnt = 0;
-    while (block != NULL) {
-        ++cnt;
-        block = (mi_block_t *) block->next;
-    }
-    assert(cnt == bnum);
-
     atomic_store_explicit(&list[tid], page->free, memory_order_release);
     page->free = NULL;
+
+    size_t allocated = 0;
+    while (allocated < bnum) {
+        if (_genmc_page_malloc(heap, page, bsize)) {
+            ++allocated;
+        }
+    }
+
+    return NULL;
+}
+
+void *routine2(void *arg)
+{
+    int tid = (int)pthread_self() - 1;
+    int other_tid = (tid + 1) % 2;
 
     mi_block_t* other_block = atomic_load_explicit(&list[other_tid], memory_order_acquire);
     mi_page_t* other_page = &pages[other_tid];
@@ -339,24 +341,7 @@ void *routine(void *arg)
         other_block = next;
     }
 
-    size_t allocated = 0;
-    while (allocated < bnum) {
-        if (_genmc_page_malloc(heap, page, bsize)) {
-            ++allocated;
-        }
-    }
-
     return NULL;
-}
-
-void *thread1(void *arg)
-{
-    return routine(arg);
-}
-
-void *thread2(void *arg)
-{
-    return routine(arg);
 }
 
 int main() {
@@ -365,9 +350,9 @@ int main() {
 
     pthread_t t1, t2;
 
-    if (pthread_create(&t1, NULL, thread1, NULL))
+    if (pthread_create(&t1, NULL, routine1, NULL))
         abort();
-    if (pthread_create(&t2, NULL, thread2, NULL))
+    if (pthread_create(&t2, NULL, routine2, NULL))
         abort();
 
     //pthread_join(t1, NULL);
