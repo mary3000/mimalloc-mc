@@ -9,10 +9,10 @@
 
 #include <assert.h>
 
-//#define GENMC_LOG 1
+// #define GENMC_LOG 1
 
 #include "test/macro.h"
-#include "mimalloc_rewrite.h"
+#include "test/race_next/mimalloc_rewrite.h"
 
 void* os_alloc(size_t size) {
     char* data = malloc(size);
@@ -51,15 +51,22 @@ void *routine1(void *arg)
     mi_page_t* page = &pages[tid];
 
     size_t bsize = (1 << 5);
-    size_t bnum = 3;
+    size_t bnum = 4;
     init_page(page, heap, bnum, bsize);
 
     char* data = os_alloc(bsize * bnum);
 
     genmc_page_free_list_extend(page, data, bsize, bnum);
 
-    atomic_store_explicit(&list[tid], page->free, memory_order_release);
+    mi_block_t* second = page->free;
+    second = (mi_block_t *) second->next;
+    mi_block_t* prev = second;
+    second = (mi_block_t *) second->next;
+    prev->next = (mi_encoded_t) NULL;
+
+    atomic_store_explicit(&list[0], page->free, memory_order_release);
     page->free = NULL;
+    atomic_store_explicit(&list[1], second, memory_order_release);
 
     size_t allocated = 0;
     while (allocated < bnum) {
@@ -73,22 +80,26 @@ void *routine1(void *arg)
 
 void *routine2(void *arg)
 {
-    int tid = (int)pthread_self() - 1;
-    int other_tid = (tid + 1) % 2;
+    int tid = (int)pthread_self() - 2;
+    //int other_tid = (tid + 1) % 2;
 
-    mi_block_t* other_block = atomic_load_explicit(&list[other_tid], memory_order_acquire);
-    mi_page_t* other_page = &pages[other_tid];
+    mi_block_t* other_block = atomic_load_explicit(&list[tid], memory_order_acquire);
+    mi_page_t* other_page = &pages[0];
 
     __VERIFIER_assume(other_block != NULL);
     assert(other_block != NULL);
 
     genmc_log("other block = %p\n", other_block);
 
+    int cnt = 0;
     while (other_block != NULL) {
         mi_block_t* next = (mi_block_t *) other_block->next;
         _genmc_free_block_mt(other_page, other_block);
         other_block = next;
+        ++cnt;
+        assert(cnt <= 2);
     }
+    assert(cnt == 2);
 
     return NULL;
 }
@@ -97,14 +108,14 @@ int main() {
 
     genmc_log("begin\n");
 
-    pthread_t t1, t2;
+    pthread_t t1, t2, t3;
 
     if (pthread_create(&t1, NULL, routine1, NULL))
         abort();
     if (pthread_create(&t2, NULL, routine2, NULL))
         abort();
-
-    //pthread_join(t1, NULL);
+    if (pthread_create(&t3, NULL, routine2, NULL))
+        abort();
 
     return 0;
 }
