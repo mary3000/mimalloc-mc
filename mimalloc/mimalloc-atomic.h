@@ -201,7 +201,11 @@ static inline uintptr_t mi_atomic_or(volatile _Atomic(uintptr_t)* p, uintptr_t x
 }
 static inline bool mi_atomic_cas_weak(volatile _Atomic(uintptr_t)* p, uintptr_t desired, uintptr_t expected) {
   MI_USING_STD
-  return atomic_compare_exchange_weak_explicit(p, &expected, desired, memory_order_release, memory_order_relaxed);
+#if defined(GENMC_BUG_CAS)
+    return atomic_compare_exchange_weak_explicit(p, &expected, desired, memory_order_release, memory_order_relaxed);
+#else
+  return atomic_compare_exchange_weak_explicit(p, &expected, desired, memory_order_acq_rel, memory_order_relaxed);
+#endif
 }
 static inline bool mi_atomic_cas_strong(volatile _Atomic(uintptr_t)* p, uintptr_t desired, uintptr_t expected) {
   MI_USING_STD

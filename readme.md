@@ -2,7 +2,7 @@
 
 ## Current issues
 
-- [test/nodeps/threads.c](test/nodeps/threads.c) Data race on `block->next` variable because [cas in mimalloc](https://github.com/microsoft/mimalloc/blob/71160e2bac443c0dd35c7ee13993466efcee57b2/include/mimalloc-atomic.h#L204) has only release mo.
+- [test/race_next](test/race_next) Data race on `block->next` variable because [cas in mimalloc](https://github.com/microsoft/mimalloc/blob/71160e2bac443c0dd35c7ee13993466efcee57b2/include/mimalloc-atomic.h#L204) has only release mo.
 
 ## Potential issues
 
