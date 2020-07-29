@@ -1,2 +1,2 @@
---unroll=5
+--unroll=4
 GENMC_BUG_CAS

@@ -329,12 +329,18 @@ static void* mi_unix_mmapx(void* addr, size_t size, size_t try_alignment, int pr
       genmc_end += size;
       mi_assert_internal(genmc_end <= GENMC_DATA_SIZE);*/
     p = malloc(size + try_alignment);
-    if (try_alignment != 0) {
-        size_t adjust = (size_t)p % try_alignment;
-        if (adjust != 0) {
-            p += try_alignment - adjust;
-        }
-    }
+
+      // too slow
+      /*for (size_t i = 0; i < size + try_alignment; ++i) {
+          *((char*)p + i) = 0;
+      }*/
+
+      if (try_alignment != 0) {
+          size_t adjust = (size_t)p % try_alignment;
+          if (adjust != 0) {
+              p += try_alignment - adjust;
+          }
+      }
     printf("malloc() end: %p - %p\n", p, p + size);
 #else
     p = mmap(addr,size,protect_flags,flags,fd,0);
