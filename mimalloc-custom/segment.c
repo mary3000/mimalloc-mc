@@ -675,6 +675,7 @@ static mi_segment_t* mi_segment_init(mi_segment_t* segment, size_t required, mi_
       segment->pages[i].used = 0;
       segment->pages[i].local_free = NULL;
       segment->pages[i].capacity = 0;
+      segment->pages[i].retire_expire = 0;
       atomic_store(&segment->pages[i].xthread_free, 0);
     }
   }

@@ -61,7 +61,7 @@ terms of the MIT license. A copy of the license can be found in the file
   #define mi_cdecl                      // leads to warnings... __attribute__((cdecl))
   #define mi_decl_export                __attribute__((visibility("default")))
   #define mi_decl_restrict
-  #define mi_attr_malloc                __attribute__((malloc))
+  #define mi_attr_malloc
   #if (defined(__clang_major__) && (__clang_major__ < 4)) || (__GNUC__ < 5)
     #define mi_attr_alloc_size(s)
     #define mi_attr_alloc_size2(s1,s2)

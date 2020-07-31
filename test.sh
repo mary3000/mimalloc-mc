@@ -1,4 +1,4 @@
-#! /bin/sh
+#! /bin/bash
 
 # usage:
 # bash test.sh path/to/test [--bug (turns on buggy version)]
@@ -26,4 +26,4 @@ esac
 done
 set -- "${POSITIONAL[@]}" # restore positional parameters
 
-./genmc/src/genmc "$options" --print-error-trace  -- "$bug" -I . "$1"/main.c
+./genmc-private/src/genmc "$options" --print-error-trace  -- "$bug" -I . "$1"/main.c
