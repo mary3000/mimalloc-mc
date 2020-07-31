@@ -20,3 +20,4 @@
 
 - I disabled `LLVM_HAS_GLOBALOBJECT_GET_METADATA` - because it was unable to get size info about some type (`Assertion failed: (Ty->isSized() && "Cannot getTypeInfo() on a type that is unsized!"), function getTypeSizeInBits, file /usr/local/Cellar/llvm@9/9.0.1_2/include/llvm/IR/DataLayout.h, line 602.`)
 
+- `__attribute__((constructor))` - supported or not?
