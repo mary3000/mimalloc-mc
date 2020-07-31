@@ -2,3 +2,7 @@
 	path = genmc
 	url = git@github.com:mary3000/genmc.git
 	branch = mimalloc-patch
+[submodule "mimalloc"]
+	path = mimalloc
+	url = git@github.com:mary3000/mimalloc.git
+	branch = mary3000/dev-atomic
