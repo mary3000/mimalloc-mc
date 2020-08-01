@@ -23,3 +23,5 @@
 - `__attribute__((constructor))` - supported or not?
 
 - `strlen` not supported
+
+- `pthread_key_create` not supported?
