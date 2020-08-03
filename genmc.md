@@ -25,3 +25,5 @@
 - `strlen` not supported
 
 - `pthread_key_create` not supported?
+
+- thread local addresses are same across threads
