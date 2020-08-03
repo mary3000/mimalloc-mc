@@ -2,9 +2,9 @@
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include "mimalloc/mimalloc.h"
-#include "mimalloc/mimalloc-internal.h"
-#include "mimalloc/mimalloc-types.h"
+#include "mimalloc-custom/mimalloc.h"
+#include "mimalloc-custom/mimalloc-internal.h"
+#include "mimalloc-custom/mimalloc-types.h"
 
 void __VERIFIER_assume(int);
 
