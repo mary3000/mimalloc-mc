@@ -9,113 +9,100 @@
 
 #include <assert.h>
 
-// #define GENMC_LOG 1
-
 #include "test/macro.h"
 #include "test/race_next/mimalloc_rewrite.h"
 
-void* os_alloc(size_t size) {
-    char* data = malloc(size);
-    genmc_log("malloc(%zu) = [%p, %p)\n", size, data, data + size);
-    /*for (size_t i = 0; i < size; ++i) {
-        data[i] = 0;
-    }*/
-    return data;
+#define THREADS 2
+#define ALLOCS 1
+
+void *os_alloc(size_t size) {
+  char *data = malloc(size);
+  return data;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-typedef _Atomic (mi_block_t*) atomic_block;
-atomic_block list[2] = {NULL, NULL};
+mi_block_t *thread1_list[THREADS];
+atomic_bool ready = ATOMIC_VAR_INIT(0);
 
-mi_heap_t heaps[2];
-mi_page_t pages[2];
+mi_heap_t thread1_heap;
+mi_page_t thread1_page;
 
-void init_page(mi_page_t* page, mi_heap_t* heap, size_t reserved, uint32_t bsize) {
-    page->free = NULL;
-    page->capacity = 0;
-    page->reserved = reserved;
-    page->xblock_size = bsize;
-
-    heap->pages_free_direct[0] = page;
-    atomic_store_explicit(&heap->thread_delayed_free, NULL, memory_order_release);
-
-    atomic_store_explicit(&page->xheap, (uintptr_t) heap, memory_order_release);
+void init_page(mi_page_t *page, mi_heap_t *heap, size_t reserved, uint32_t bsize) {
+  page->free = NULL;
+  page->capacity = 0;
+  page->reserved = reserved;
+  page->xblock_size = bsize;
+  heap->pages_free_direct[0] = page;
+  atomic_store_explicit(&heap->thread_delayed_free, NULL, memory_order_release);
+  atomic_store_explicit(&page->xheap, (uintptr_t) heap, memory_order_release);
 }
 
-void *routine1(void *arg)
-{
-    int tid = (int)pthread_self() - 1;
+void *routine1(void *arg) {
+  size_t bsize = (1 << 5);
+  size_t bnum = THREADS * ALLOCS;
+  init_page(&thread1_page, &thread1_heap, bnum, bsize);
 
-    mi_heap_t* heap = &heaps[tid];
-    mi_page_t* page = &pages[tid];
+  char *data = os_alloc(bsize * bnum);
 
-    size_t bsize = (1 << 5);
-    size_t bnum = 4;
-    init_page(page, heap, bnum, bsize);
+  genmc_page_free_list_extend(&thread1_page, data, bsize, bnum);
 
-    char* data = os_alloc(bsize * bnum);
-
-    genmc_page_free_list_extend(page, data, bsize, bnum);
-
-    mi_block_t* second = page->free;
-    second = (mi_block_t *) second->next;
-    mi_block_t* prev = second;
-    second = (mi_block_t *) second->next;
-    prev->next = (mi_encoded_t) NULL;
-
-    atomic_store_explicit(&list[0], page->free, memory_order_release);
-    page->free = NULL;
-    atomic_store_explicit(&list[1], second, memory_order_release);
-
-    size_t allocated = 0;
-    while (allocated < bnum) {
-        if (_genmc_page_malloc(heap, page, bsize)) {
-            ++allocated;
-        }
+  mi_block_t *cur = thread1_page.free;
+  for (size_t i = 0; i < THREADS; ++i) {
+    thread1_list[i] = cur;
+    for (size_t j = 0; j < ALLOCS - 1; ++j) {
+      cur = mi_block_next(&thread1_page, cur);
     }
+    mi_block_t *next = mi_block_next(&thread1_page, cur);
+    mi_block_set_next(&thread1_page, cur, NULL);
+    cur = next;
+  }
 
-    return NULL;
+  atomic_store_explicit(&ready, true, memory_order_release);
+  thread1_page.free = NULL;
+
+  for (size_t allocated = 0; allocated < bnum;) {
+    if (_genmc_page_malloc(&thread1_heap, &thread1_page, bsize)) {
+      ++allocated;
+    }
+  }
+
+  return NULL;
 }
 
-void *routine2(void *arg)
-{
-    int tid = (int)pthread_self() - 2;
-    //int other_tid = (tid + 1) % 2;
+void *routine2(void *arg) {
+  int tid = (int) pthread_self() - 2;
 
-    mi_block_t* other_block = atomic_load_explicit(&list[tid], memory_order_acquire);
-    mi_page_t* other_page = &pages[0];
+  bool is_ready = atomic_load_explicit(&ready, memory_order_acquire);
+  __VERIFIER_assume(is_ready);
 
-    __VERIFIER_assume(other_block != NULL);
-    assert(other_block != NULL);
+  mi_block_t* cur = thread1_list[tid];
+  int cnt = 0;
+  while (cur != NULL) {
+    mi_block_t *next = mi_block_next(&thread1_page, cur);
+    _genmc_free_block_mt(&thread1_page, cur);
+    cur = next;
+    ++cnt;
+    assert(cnt <= ALLOCS);
+  }
+  assert(cnt == ALLOCS);
 
-    genmc_log("other block = %p\n", other_block);
-
-    int cnt = 0;
-    while (other_block != NULL) {
-        mi_block_t* next = (mi_block_t *) other_block->next;
-        _genmc_free_block_mt(other_page, other_block);
-        other_block = next;
-        ++cnt;
-        assert(cnt <= 2);
-    }
-    assert(cnt == 2);
-
-    return NULL;
+  return NULL;
 }
 
 int main() {
+  pthread_t t1;
+  pthread_t ts[THREADS];
 
-    genmc_log("begin\n");
+  if (pthread_create(&t1, NULL, routine1, NULL)) {
+    abort();
+  }
 
-    pthread_t t1, t2, t3;
+  for (size_t i = 0; i < THREADS; ++i) {
+    if (pthread_create(&ts[i], NULL, routine2, NULL)) {
+      abort();
+    }
+  }
 
-    if (pthread_create(&t1, NULL, routine1, NULL))
-        abort();
-    if (pthread_create(&t2, NULL, routine2, NULL))
-        abort();
-    if (pthread_create(&t3, NULL, routine2, NULL))
-        abort();
-
-    return 0;
+  return 0;
 }
