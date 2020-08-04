@@ -1,5 +1,7 @@
 #pragma once
 
+#define GENMC 1
+
 #define GENMC_IGNORE_PRINT 1
 
 #define GENMC_REMOVE_CONSTRUCTOR 1
