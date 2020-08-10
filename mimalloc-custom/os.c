@@ -189,8 +189,10 @@ static bool mi_os_mem_free(void* addr, size_t size, bool was_committed, mi_stats
   err = 0; // WebAssembly's heap cannot be shrunk
 #else
 #if defined(GENMC_MMAP_TO_MALLOC)
-  printf("free() %p - %p\n", addr, addr + size);
-  //free(addr);
+  uintptr_t* prev_p = (uintptr_t*)addr - 1;
+  char* malloc_addr = (char*)*prev_p;
+  printf("free() %p - %p\n", malloc_addr, malloc_addr + size);
+  free(malloc_addr);
 #else
   err = (munmap(addr, size) == -1);
 #endif
@@ -328,20 +330,26 @@ static void* mi_unix_mmapx(void* addr, size_t size, size_t try_alignment, int pr
     }
       genmc_end += size;
       mi_assert_internal(genmc_end <= GENMC_DATA_SIZE);*/
-    p = malloc(size + try_alignment);
+    size_t final_size = size + try_alignment + sizeof(uintptr_t);
+    p = malloc(final_size);
 
       // too slow
       /*for (size_t i = 0; i < size + try_alignment; ++i) {
           *((char*)p + i) = 0;
       }*/
 
+      char* final_p = (char*)p + sizeof(uintptr_t);
+
       if (try_alignment != 0) {
-          size_t adjust = (size_t)p % try_alignment;
+          size_t adjust = (size_t)final_p % try_alignment;
           if (adjust != 0) {
-              p += try_alignment - adjust;
+              final_p += try_alignment - adjust;
           }
       }
-    printf("malloc() end: %p - %p\n", p, p + size);
+      char* prev_p = final_p - sizeof(uintptr_t);
+      *(uintptr_t*)prev_p = (uintptr_t) p;
+    printf("malloc() end: %p - %p\n", final_p, final_p + size);
+    p = final_p;
 #else
     p = mmap(addr,size,protect_flags,flags,fd,0);
     if (p==MAP_FAILED) p = NULL;

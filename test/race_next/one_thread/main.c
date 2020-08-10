@@ -39,7 +39,7 @@ void init_page(mi_page_t* page, mi_heap_t* heap, size_t reserved, uint32_t bsize
 
 void* routine1(void* arg) {
   size_t bsize = (1 << 5);
-  size_t bnum = 3;
+  size_t bnum = 1;
   init_page(&thread1_page, &thread1_heap, bnum, bsize);
 
   char* data = os_alloc(bsize * bnum);

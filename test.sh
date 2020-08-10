@@ -1,7 +1,7 @@
 #! /bin/bash
 
 # usage:
-# bash test.sh path/to/test [--bug (turns on buggy version)]
+# ./test.sh path/to/test [--bug (turns on buggy version)]
 
 options=$(sed -n '1p' "$1"/config.txt)
 cflags=$(sed -n '2p' "$1"/config.txt)
@@ -26,4 +26,4 @@ esac
 done
 set -- "${POSITIONAL[@]}" # restore positional parameters
 
-./genmc-private/src/genmc "$options" --print-error-trace  -- "$bug" -I . "$1"/main.c
+(./genmc-private/src/genmc "$options"  -- "$bug" -I mimalloc/include -I . "$1"/main.c) 2>&1 | tee "$1"/out.txt
