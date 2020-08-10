@@ -26,4 +26,4 @@ esac
 done
 set -- "${POSITIONAL[@]}" # restore positional parameters
 
-(./genmc-private/src/genmc "$options"  -- "$bug" -I mimalloc/include -I . "$1"/main.c) 2>&1 | tee "$1"/out.txt
+(lldb ./genmc-private/src/genmc -o run -- "$options"  -- "$bug" -I mimalloc/include -I . "$1"/main.c) 2>&1 | tee "$1"/out.txt
