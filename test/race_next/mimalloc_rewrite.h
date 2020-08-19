@@ -50,6 +50,7 @@ void _genmc_free_block_mt(mi_page_t* page, mi_block_t* block) {
         //mi_block_set_nextx(heap,block,dfree, heap->keys);
         block->next = (mi_encoded_t) dfree;
       } while (!mi_atomic_cas_ptr_weak(mi_block_t, &heap->thread_delayed_free, block, dfree));
+      genmc_log("thread_delayed_free put, heap = %p\n", heap);
     }
 
     // and reset the MI_DELAYED_FREEING flag
@@ -60,7 +61,7 @@ void _genmc_free_block_mt(mi_page_t* page, mi_block_t* block) {
     } while (!mi_atomic_cas_weak(&page->xthread_free, tfreex, tfree));
   }
 
-  genmc_log("DONE!\n");
+  genmc_log("DONE!\n\n");
 }
 
 void genmc_page_free_list_extend(mi_page_t* const page, void* page_area, const size_t bsize, const size_t extend) {
@@ -91,6 +92,7 @@ void genmc_page_free_list_extend(mi_page_t* const page, void* page_area, const s
 }
 
 mi_page_t* genmc_find_page(mi_heap_t* heap, size_t size) {
+  _mi_page_free_collect(heap->pages_free_direct[0], false);
   return heap->pages_free_direct[0];
 }
 
@@ -143,6 +145,8 @@ static inline void _genmc_free_block(mi_page_t* page, bool local, mi_block_t* bl
     mi_block_set_next(page, block, page->local_free);
     page->local_free = block;
     page->used--;
+
+    genmc_log("local_free %p\n", page->local_free);
 
     /*if (mi_unlikely(mi_page_all_free(page))) {
         _mi_page_retire(page);
@@ -212,6 +216,7 @@ static void _mi_page_thread_free_collect(mi_page_t* page) {
   // and append the current local free list
   mi_block_set_next(page, tail, page->local_free);
   page->local_free = head;
+  genmc_log("local_free\n");
 
   // update counts now
   page->used -= count;
@@ -219,16 +224,22 @@ static void _mi_page_thread_free_collect(mi_page_t* page) {
 
 void _mi_page_free_collect(mi_page_t* page, bool force) {
       mi_assert_internal(page != NULL);
+  genmc_log("_mi_page_free_collect\n");
+
 
   // collect the thread free list
   if (force || mi_page_thread_free(page) != NULL) {  // quick test to avoid an atomic operation
+    genmc_log("not free\n");
     _mi_page_thread_free_collect(page);
   }
+
+  genmc_log("page->local_free = %p\n", page->local_free);
 
   // and the local free list
   if (page->local_free != NULL) {
     if (mi_likely(page->free == NULL)) {
       // usual case
+      genmc_log("localfree to free\n");
       page->free = page->local_free;
       page->local_free = NULL;
       page->is_zero = false;
@@ -273,11 +284,14 @@ void _mi_heap_delayed_free(mi_heap_t* heap) {
     block = mi_atomic_read_ptr_relaxed(mi_block_t, &heap->thread_delayed_free);
   } while (block != NULL && !mi_atomic_cas_ptr_weak(mi_block_t, &heap->thread_delayed_free, NULL, block));
 
+  genmc_log("grab thread_delayed_free, heap = %p, block = %p\n", heap, block);
+
   // and free them all
   while (block != NULL) {
     //mi_block_t* next = mi_block_nextx(heap,block, heap->keys);
     mi_block_t* next = (mi_block_t*) block->next;
     // use internal free instead of regular one to keep stats etc correct
+    genmc_log("_genmc_free_delayed_block\n");
     if (!_genmc_free_delayed_block(heap->pages_free_direct[0], block)) {
       // we might already start delayed freeing while another thread has not yet
       // reset the delayed_freeing flag; in that case delay it further by reinserting.
@@ -309,14 +323,16 @@ void* _genmc_malloc_generic(mi_heap_t* heap, size_t size) mi_attr_noexcept
     page = genmc_find_page(heap, size);
   }
 
-  //mi_assert_internal(page != NULL);
+  mi_assert_internal(page != NULL);
   if (mi_unlikely(page == NULL)) { // out of memory
     _mi_error_message(ENOMEM, "cannot allocate memory (%zu bytes requested)\n", size);
     return NULL;
   }
 
+  genmc_log("here %p\n", page->free);
   //mi_assert_internal(mi_page_immediate_available(page));
   __VERIFIER_assume(page->free != NULL);
+  genmc_log("here 2\n");
 
       mi_assert_internal(mi_page_block_size(page) >= size);
 

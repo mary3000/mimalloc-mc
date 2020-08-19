@@ -67,6 +67,8 @@ void* routine1(void* arg) {
     }
   }
 
+  free(data);
+
   return NULL;
 }
 
@@ -103,6 +105,8 @@ int main() {
       abort();
     }
   }
+
+  pthread_join(t1, NULL); // ensure we will free data
 
   return 0;
 }

@@ -9,6 +9,8 @@
 
 #include <assert.h>
 
+//#define GENMC_LOG 1
+
 #include "test/macro.h"
 #include "test/race_next/mimalloc_rewrite.h"
 
@@ -45,14 +47,23 @@ void* routine1(void* arg) {
   char* data = os_alloc(bsize * bnum);
   genmc_page_free_list_extend(&thread1_page, data, bsize, bnum);
 
+  genmc_log("block = %p\n", data);
+
   atomic_store_explicit(&thread1_block, thread1_page.free, memory_order_release);
   thread1_page.free = NULL;
 
+  genmc_log("before malloc\n");
+
   for (size_t allocated = 0; allocated < bnum;) {
+    genmc_log("allocated = %d\n", allocated);
     if (_genmc_page_malloc(&thread1_heap, &thread1_page, bsize)) {
+      genmc_log("malloced, allocated = %d\n", allocated);
       ++allocated;
     }
   }
+
+  genmc_log("free\n");
+  free(data);
 
   return NULL;
 }
@@ -65,6 +76,7 @@ void* routine2(void* arg) {
   assert(other_block != NULL);
 
   while (other_block != NULL) {
+    genmc_log("free other\n");
     mi_block_t* next = (mi_block_t*) other_block->next;
     _genmc_free_block_mt(&thread1_page, other_block);
     other_block = next;
@@ -80,6 +92,8 @@ int main() {
     abort();
   if (pthread_create(&t2, NULL, routine2, NULL))
     abort();
+
+  pthread_join(t1, NULL); // ensure we will free data
 
   return 0;
 }
