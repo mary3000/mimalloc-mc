@@ -1,10 +1,12 @@
 #! /bin/bash
 
 # usage:
-# ./test.sh path/to/test [--bug (turns on buggy version)]
+# ./test.sh path/to/test [--bug #bug_number (turns on bug number #bug_number)]
+# example:
+#./test.sh test/alloc_free_mt --bug 2
 
+path="$1"
 options=$(sed -n '1p' "$1"/config.txt)
-cflags=$(sed -n '2p' "$1"/config.txt)
 
 bug=""
 
@@ -15,8 +17,12 @@ key="$1"
 
 case $key in
     --bug)
+    num="$2"
+    ((num++))
+    cflags=$(sed -n "$num"'p' "$path"/config.txt)
     bug=-D"$cflags"
     shift # past argument
+    shift # past value
     ;;
     *)
     POSITIONAL+=("$1") # save it in an array for later
