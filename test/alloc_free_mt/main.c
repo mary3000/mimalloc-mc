@@ -14,7 +14,7 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 void* thread_one(void* arg) {
-  printf("mi_malloc begin\n");
+  genmc_log("mi_malloc begin\n");
 
   void* p1 = mi_malloc(16);
   printf("p1: %p\n", p1);
@@ -22,17 +22,17 @@ void* thread_one(void* arg) {
 
   mi_free(p1);
 
-  printf("mi_free done\n");
+  genmc_log("mi_free done\n");
 
   mi_pthread_done(mi_get_default_heap());
 
-  printf("thread done\n");
+  genmc_log("thread done\n");
 
   return NULL;
 }
 
 int main() {
-  printf("mi_process_load begin\n");
+  genmc_log("mi_process_load begin\n");
 
   mi_process_load();
 
@@ -47,6 +47,8 @@ int main() {
   pthread_join(t2, NULL);
 
   mi_process_done();
+
+  genmc_log("process done\n");
 
   return 0;
 }
