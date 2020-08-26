@@ -6,7 +6,7 @@
 
 - Intrinsics (`llvm.objectsize.i64.p0i8`, `llvm.umul.with.overflow.i64`)
 
-- mmap - not supported. Can be replaced with malloc though.
+- mmap - not supported. Can be replaced with malloc though. But mmap can be munmapped by parts, whereas malloc can only be freed as a whole region.
 
 - Malloc - very inefficient (per-byte for loop on allocation)
 
@@ -26,4 +26,4 @@
 
 - `pthread_key_create` not supported?
 
-- thread local addresses are same across threads
+- thread local addresses are the same across threads
