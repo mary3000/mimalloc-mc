@@ -60,6 +60,23 @@ Thread T2:
 
 **Fix:** make `region->value` read with `acquire` memory order instead of `relaxed`. This will create _synchronizes-with_ edge between threads, and will forbid T2 to read "stale" value, because store of this value will be before T2's store (via CAS) in happens-before order.
 
+Code for [CppMem](http://svr-pes20-cppmem.cl.cam.ac.uk/cppmem/):
+```cpp
+int main() {
+  atomic_int bitmap = 0; 
+  atomic_int info = 0;
+  {{{ { bitmap.store(0, memory_order_release);
+        info.store(1, memory_order_release); }
+  ||| { info.load(memory_order_relaxed).readsvalue(1);
+        bitmap.load(memory_order_acquire).readsvalue(0);
+        bitmap.store(1, memory_order_release);
+        bitmap.load(memory_order_relaxed).readsvalue(0); }
+  }}};
+  return 0; }
+```
+Memory relations from CppMem:  
+<img src="https://i.ibb.co/TvMxjVD/Screenshot-2020-08-27-at-17-23-00.png" width="300"/>
+
 ## Potential issues
 
 - Non-trivial algorithm in multithread freeing (using `delayed` flags) due to full pages logic.
