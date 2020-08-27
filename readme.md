@@ -60,7 +60,7 @@ Thread T2:
 
 **Fix:** make `region->value` read with `acquire` memory order instead of `relaxed`. This will create _synchronizes-with_ edge between threads, and will forbid T2 to read "stale" value, because store of this value will be before T2's store (via CAS) in happens-before order.
 
-Code for [CppMem](http://svr-pes20-cppmem.cl.cam.ac.uk/cppmem/):
+Code for [CppMem](http://svr-pes20-cppmem.cl.cam.ac.uk/cppmem/) (emulates CAS with load/store, which in this particular case is ok):
 ```cpp
 int main() {
   atomic_int bitmap = 0; 
